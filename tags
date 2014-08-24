@@ -1,0 +1,57 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+Adapter	tank.py	/^class Adapter(pygame.sprite.Sprite):$/;"	c
+Bullet	tank.py	/^class Bullet(pygame.sprite.Sprite):$/;"	c
+OuterAdapter	tank.py	/^class OuterAdapter(Adapter):$/;"	c
+OuterWall	tank.py	/^class OuterWall(Wall):$/;"	c
+RemotePlay	tank.py	/^class RemotePlay(object):$/;"	c
+Tank	tank.py	/^class Tank(pygame.sprite.Sprite):$/;"	c
+Wall	tank.py	/^class Wall(pygame.sprite.Sprite):$/;"	c
+__init__	tank.py	/^    def __init__(self, tank, speed):$/;"	m	class:Bullet
+__init__	tank.py	/^    def __init__(self, x, y):$/;"	m	class:Adapter
+__init__	tank.py	/^    def __init__(self, x, y, way):$/;"	m	class:Wall
+__init__	tank.py	/^    def __init__(self, x, y, way, speed, bullet_speed, bullet_per_sec, center=False):$/;"	m	class:Tank
+adapter_height	tank.py	/^adapter_height = Adapter.adapter_image.get_height()$/;"	v
+adapter_image	tank.py	/^    adapter_image = inner_adapter_image$/;"	v	class:Adapter
+adapter_image	tank.py	/^    adapter_image = outer_adapter_image$/;"	v	class:OuterAdapter
+adapter_width	tank.py	/^adapter_width = Adapter.adapter_image.get_width()$/;"	v
+adapters	tank.py	/^adapters = pygame.sprite.RenderUpdates()$/;"	v
+all_sprites	tank.py	/^all_sprites = pygame.sprite.RenderUpdates()$/;"	v
+bullets	tank.py	/^bullets = pygame.sprite.RenderUpdates()$/;"	v
+clock	tank.py	/^clock = pygame.time.Clock()$/;"	v
+done	tank.py	/^            done = True$/;"	v
+done	tank.py	/^done = False$/;"	v
+inner_adapter_image	tank.py	/^    inner_adapter_image = pygame.image.load('adapter.png').convert()$/;"	v	class:Adapter
+inner_wall_landscape	tank.py	/^    inner_wall_landscape = pygame.image.load('wall.png').convert()$/;"	v	class:Wall
+inner_wall_portrait	tank.py	/^    inner_wall_portrait = pygame.transform.rotate(inner_wall_landscape, 90)$/;"	v	class:Wall
+last_relative_x	tank.py	/^    last_relative_x = mytank.relative_x$/;"	v
+last_relative_y	tank.py	/^    last_relative_y = mytank.relative_y$/;"	v
+make_field	tank.py	/^def make_field():$/;"	f
+mytank	tank.py	/^mytank = Tank(screen_width\/2, screen_height\/2, 'right', 300, 500, 2, True)$/;"	v
+outer_adapter_image	tank.py	/^    outer_adapter_image = pygame.image.load('outer_adapter.png').convert()$/;"	v	class:OuterAdapter
+outer_wall_landscape	tank.py	/^    outer_wall_landscape = pygame.image.load('outer_wall.png').convert()$/;"	v	class:OuterWall
+outer_wall_portrait	tank.py	/^    outer_wall_portrait = pygame.transform.rotate(outer_wall_landscape, 90)$/;"	v	class:OuterWall
+passed_seconds	tank.py	/^    passed_seconds = time_passed \/ 1000.0$/;"	v
+receive	tank.py	/^    def receive(self, port):$/;"	m	class:RemotePlay
+screen	tank.py	/^screen = pygame.display.set_mode([screen_width, screen_height])$/;"	v
+screen_height	tank.py	/^screen_height = 768$/;"	v
+screen_width	tank.py	/^screen_width = 1024$/;"	v
+send	tank.py	/^    def send(self, ipaddr, port, data):$/;"	m	class:RemotePlay
+sock	tank.py	/^sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)$/;"	v
+tanks	tank.py	/^tanks = pygame.sprite.RenderUpdates()$/;"	v
+time_passed	tank.py	/^    time_passed = clock.tick(60)$/;"	v
+update	tank.py	/^    def update(self, relative_x, relative_y):$/;"	m	class:Adapter
+update	tank.py	/^    def update(self, relative_x, relative_y):$/;"	m	class:Bullet
+update	tank.py	/^    def update(self, relative_x, relative_y):$/;"	m	class:Wall
+update	tank.py	/^    def update(self, relative_x=None, relative_y=None):$/;"	m	class:Tank
+wall_height	tank.py	/^wall_height = Wall.wall_landscape.get_height()$/;"	v
+wall_landscape	tank.py	/^    wall_landscape = inner_wall_landscape$/;"	v	class:Wall
+wall_landscape	tank.py	/^    wall_landscape = outer_wall_landscape$/;"	v	class:OuterWall
+wall_portrait	tank.py	/^    wall_portrait = inner_wall_portrait$/;"	v	class:Wall
+wall_portrait	tank.py	/^    wall_portrait = outer_wall_portrait$/;"	v	class:OuterWall
+wall_width	tank.py	/^wall_width = Wall.wall_landscape.get_width()$/;"	v
+walls	tank.py	/^walls = pygame.sprite.RenderUpdates()$/;"	v
