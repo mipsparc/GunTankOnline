@@ -388,13 +388,25 @@ if __name__ == '__main__':
     server_addr = '192.168.3.4:5000'
     #proxy対策
     my_ipaddr = raw_input('MyIPaddr> ')
-    
+
+    #debug
     if my_ipaddr=='localhost':
+        debug = True
         my_ipaddr = '127.0.0.1'
-        server_ipaddr = '127.0.0.1:5000'
+        server_addr = '127.0.0.1:5000'
         send_port = int(raw_input('SEND PORT> '))
         receive_port = int(raw_input('RECV PORT> '))
+        #クライアント0か1か確認
+        client_num = int(raw_input('Client 0/1? > '))
+        #ユーザを固定しておく
+        if client_num:
+            user_id = 19623
+            password = 77681
+        else:
+            user_id = 41170
+            password = 84981
     else:
+        debug = False
         send_port = 8800
         receive_port = 8800
     
@@ -411,9 +423,6 @@ if __name__ == '__main__':
 
     pygame.display.set_caption('GTO -Gun Tank Online-')
     clock = pygame.time.Clock()
-
-    #削除する弾リスト
-    struckted_bullet_list = list()
 
     wall_width = pygame.image.load('./imgs/wall.png').get_width()
     wall_height = pygame.image.load('./imgs/wall.png').get_height()
@@ -432,8 +441,9 @@ if __name__ == '__main__':
     send_process.start()
     receive_process.start()
     
-    time_delay = 0
-
+    #削除する弾リスト
+    struckted_bullet_list = list()
+    
     input_entered = None
     textbox_width = 300
     textbox_height = 75
@@ -474,8 +484,12 @@ if __name__ == '__main__':
                 Bullet.containers = all_sprites, bullets
                 
                 #テキストボックス初期化
-                textboxes[0].str_list = list()
-                textboxes[1].str_list = list()
+                if debug:
+                    textboxes[0].str_list = list(str(user_id))
+                    textboxes[1].str_list = list(str(password))
+                else:
+                    textboxes[0].str_list = list()
+                    textboxes[1].str_list = list()
                 state = 'title'
 
             #タイトル画面
@@ -586,7 +600,7 @@ if __name__ == '__main__':
                 adapters.update(mytank.relative_x, mytank.relative_y)
                 bullets.update(mytank.relative_x, mytank.relative_y)
                 
-                #固定obj(壁,アダプタ)との当たり判定
+                #固定obj(壁,アダプタ)と機体との当たり判定
                 if pygame.sprite.spritecollideany(mytank, walls) \
                         or pygame.sprite.spritecollideany(mytank, adapters):
                     mytank.relative_x = last_relative_x
@@ -604,7 +618,7 @@ if __name__ == '__main__':
                                     'y':mytank.y,
                                     'way':mytank.way})
                 
-                screen.fill((255, 255, 255))
+                screen.fill((187, 127, 90))
                 all_sprites.draw(screen)
             
                 #ループごとに死亡・全滅確認
