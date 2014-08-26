@@ -56,9 +56,11 @@ class Tank(pygame.sprite.Sprite):
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
 
+            #前フレームからのdiff
             x_diff = 0
             y_diff = 0
 
+            #移動
             pygame.event.pump()
             pressed_keys = pygame.key.get_pressed()
             last_way = self.way
@@ -83,6 +85,7 @@ class Tank(pygame.sprite.Sprite):
                 elif self.way == 'left' or self.way == 'right':
                     y_diff = 0
 
+            #発射
             self.bullet_passed_sec += passed_seconds
             if pressed_keys[K_SPACE] and \
                     self.bullet_passed_sec * self.bullet_per_sec >= 1:
@@ -111,10 +114,10 @@ class Tank(pygame.sprite.Sprite):
         elif self.way == 'right':
             self.image = self.right_image
 
-    def fire(self, speed, bullet_id=None):
+    def fire(self, speed, bullet_id=None, colid_point=None):
         if self.center:
             bullet_id = random.randint(1, 99999999)
-            Bullet(self, speed, bullet_id, self.bullet_damage)
+            bullet = Bullet(self, speed, bullet_id, self.bullet_damage)
             send_queue.put({
                 'ipaddr_list':ipaddr_list,
                 'type':'fire',
@@ -123,17 +126,18 @@ class Tank(pygame.sprite.Sprite):
                 'y':self.y,
                 'way':self.way,
                 'bullet_id':bullet_id,
-                'speed':speed
+                'speed':speed,
+                'colid_point':bullet.colid_point,
                 })
         else:
-            Bullet(self, speed,bullet_id, self.bullet_damage)
+            Bullet(self, speed,bullet_id, self.bullet_damage, colid_point)
 
     def struck(self, bullet_damage):
         self.hp -= bullet_damage
 
 
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, tank, speed, bullet_id, bullet_damage):
+    def __init__(self, tank, speed, bullet_id, bullet_damage, colid_point=None):
         self.tank = tank
         pygame.sprite.Sprite.__init__(self, self.containers)
 
@@ -145,6 +149,7 @@ class Bullet(pygame.sprite.Sprite):
 
         self.origin_image = pygame.image.load(bullet_id_file[self.tank.tank_id]).convert_alpha()
 
+        #発射される初期位置を設定
         if tank.way == 'up':
             if tank.center:
                 self.default_x = screen_width/2 + tank.relative_x + tank.width/2
@@ -185,9 +190,53 @@ class Bullet(pygame.sprite.Sprite):
         if tank.center:
             self.rect.x = self.default_x - tank.relative_x
             self.rect.y = self.default_y - tank.relative_y
+            
+            #壁との衝突予定ポイントを計算
+            #衝突を検知するrectの大きさ
+            max_detect = 2000
+            if tank.way == 'up' or tank.way == 'down':
+                detect_rect = self.rect.inflate(0, max_detect)
+            else:
+                detect_rect = self.rect.inflate(max_detect, 0)
+                
+            #弾の飛んでいく方向にdetect_rectの位置を合わせる
+            if tank.way == 'up':
+                detect_rect.y = self.rect.y - max_detect
+            elif tank.way == 'down':
+                detect_rect.y = self.rect.y
+            elif tank.way == 'left':
+                detect_rect.x = self.rect.x - max_detect
+            elif tank.way == 'right':
+                detect_rect.x = self.rect.x
+            detect_sprite = pygame.sprite.Sprite()
+            detect_sprite.rect = detect_rect
+            #衝突予定rect
+            strike_sprites = pygame.sprite.spritecollide(detect_sprite, walls, False)
+            #衝突する可能性のあるxまたはy座標のリスト
+            colid_points = list()
+            for strike_sprite in strike_sprites:
+                if tank.way == 'left' or tank.way == 'right':
+                    if strike_sprite.way == 'portrait':
+                        colid_points.append(strike_sprite.default_x)
+                    elif strike_sprite.way == 'landscape':
+                        colid_points.append(strike_sprite.default_x + strike_sprite.width)
+                elif tank.way == 'up' or tank.way == 'down':
+                    if strike_sprite.way == 'landscape':
+                        colid_points.append(strike_sprite.default_y)
+                    elif strike_sprite.way == 'portrait':
+                        colid_points.append(strike_sprite.default_y + strike_sprite.width)
+
+            if self.way == 'down' or self.way == 'right':
+                colid_point = min(colid_points)
+            else:
+                colid_point = max(colid_points)
+                
         else:
             self.rect.x = self.default_x - mytank.relative_x
             self.rect.y = self.default_y - mytank.relative_y
+            
+        #衝突予定座標
+        self.colid_point = colid_point
 
     def update(self, relative_x, relative_y):
         passed_seconds = self.clock.tick()/1000.0
@@ -202,9 +251,13 @@ class Bullet(pygame.sprite.Sprite):
             self.default_x += self.speed * passed_seconds
 
         #固定objとの衝突時
-        if pygame.sprite.spritecollideany(self, walls):
+        if self.way == 'left' and self.default_x<=self.colid_point \
+            or self.way == 'right' and self.default_x>=self.colid_point \
+                or self.way == 'up' and self.default_y<=self.colid_point \
+                    or self.way == 'down' and self.default_y>=self.colid_point:
             bullets.remove(self)
             all_sprites.remove(self)
+        
         #自機に衝突時
         if not self.tank.center and pygame.sprite.collide_rect(self, mytank):
             mytank.struck(self.bullet_damage)
@@ -242,6 +295,7 @@ class Wall(pygame.sprite.Sprite):
         self.rect.y = y
         self.default_x = x
         self.default_y = y
+        self.way = way
 
     def update(self, relative_x, relative_y):
         self.rect.x = self.default_x - relative_x
@@ -264,6 +318,7 @@ class Adapter(pygame.sprite.Sprite):
 
         self.get_img()
 
+        self.way = 'landscape'
         self.image = self.adapter_image
         self.width = self.image.get_width()
         self.height = self.image.get_height()
@@ -374,7 +429,8 @@ def enemy_fire(receive_data, ipaddr):
             enemy['obj'].default_x = receive_data['x']
             enemy['obj'].default_y = receive_data['y']
             enemy['obj'].way = receive_data['way']
-            enemy['obj'].fire(receive_data['speed'],receive_data['bullet_id'])
+            enemy['obj'].fire(receive_data['speed'],receive_data['bullet_id'],
+                              receive_data['colid_point'])
 
 #敵が被弾したと申告してきた時にHPを合わせて,弾IDを削除リストに追加
 def enemy_struck(receive_data, ipaddr):
@@ -592,9 +648,11 @@ if __name__ == '__main__':
                     elif receive_data['type'] == 'struck':
                         enemy_struck(receive_data, ipaddr)
 
+                #移動前の位置を格納
                 last_relative_x = mytank.relative_x
                 last_relative_y = mytank.relative_y
 
+                #各オブジェクトをupdate
                 tanks.update(mytank.relative_x, mytank.relative_y)
                 walls.update(mytank.relative_x, mytank.relative_y)
                 adapters.update(mytank.relative_x, mytank.relative_y)
@@ -608,7 +666,7 @@ if __name__ == '__main__':
                     walls.update(mytank.relative_x, mytank.relative_y)
                     adapters.update(mytank.relative_x, mytank.relative_y)
 
-                #動いた場合に送信
+                #機体が動いた場合に送信
                 if last_relative_x != mytank.relative_x or \
                         last_relative_y != mytank.relative_y:
                             send_queue.put({
