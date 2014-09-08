@@ -12,7 +12,7 @@ from textbox import TextBox, Button
 
 class Tank(pygame.sprite.Sprite):
     def __init__(self, x, y, way, speed, bullet_speed, bullet_per_sec,
-            hp, bullet_damage, tank_id, center=None):
+            hp, bullet_damage, tank_id, center=None, accel_ratio=None, brake_ratio=None):
         #setting sprite group
         pygame.sprite.Sprite.__init__(self, self.containers)
 
@@ -33,6 +33,12 @@ class Tank(pygame.sprite.Sprite):
         self.bullet_per_sec = bullet_per_sec
         self.bullet_damage = bullet_damage
         self.tank_id = tank_id
+        
+        #各方向の速度
+        self.x_speed = 0
+        self.y_speed = 0
+        self.accel_ratio = accel_ratio
+        self.brake_ratio = brake_ratio
 
         self.up_image = pygame.transform.rotate(self.origin_image, 270)
         self.right_image = pygame.transform.rotate(self.origin_image, 180)
@@ -55,7 +61,10 @@ class Tank(pygame.sprite.Sprite):
     def update(self, relative_x=None, relative_y=None):
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
-
+        
+            brake_ratio = self.brake_ratio
+            accel_ratio = self.accel_ratio
+        
             #前フレームからのdiff
             x_diff = 0
             y_diff = 0
@@ -66,16 +75,57 @@ class Tank(pygame.sprite.Sprite):
             last_way = self.way
             if pressed_keys[K_UP] or pressed_keys[K_w]:
                 self.way = 'up'
-                y_diff = -self.speed * passed_seconds
+                #反対に動いている場合
+                if self.y_speed > 0:
+                    self.y_speed -= 2 * accel_ratio * passed_seconds
+                else:
+                    self.y_speed -= accel_ratio * passed_seconds
+                #制限速度管理
+                if self.y_speed < -self.speed: self.y_speed = -self.speed
+                #何もないなら自動で減速
+                self.x_speed = int(self.x_speed * brake_ratio * 0.5)
+                    
             elif pressed_keys[K_DOWN] or pressed_keys[K_s]:
                 self.way = 'down'
-                y_diff = self.speed * passed_seconds
+                if self.y_speed < 0:
+                    self.y_speed += 2 * accel_ratio * passed_seconds
+                else:
+                    self.y_speed += accel_ratio * passed_seconds
+                if self.y_speed > self.speed: self.y_speed = self.speed
+                self.x_speed = int(self.x_speed * brake_ratio * 0.5)
+                
             elif pressed_keys[K_LEFT] or pressed_keys[K_a]:
                 self.way = 'left'
-                x_diff = -self.speed * passed_seconds
+                if self.x_speed > 0:
+                    self.x_speed -= 2 * accel_ratio * passed_seconds
+                else:
+                    self.x_speed -= accel_ratio * passed_seconds
+                if self.x_speed < -self.speed: self.x_speed = -self.speed
+                self.y_speed = int(self.y_speed * brake_ratio * 0.5)                    
+                
             elif pressed_keys[K_RIGHT] or pressed_keys[K_d]:
                 self.way = 'right'
-                x_diff = self.speed * passed_seconds
+                if self.x_speed < 0:
+                    self.x_speed += 2 * accel_ratio * passed_seconds
+                else:
+                    self.x_speed += accel_ratio * passed_seconds
+                if self.x_speed > self.speed: self.x_speed = self.speed
+                self.y_speed = int(self.y_speed * brake_ratio * 0.5)                
+                
+            else:
+                self.x_speed = int(self.x_speed * brake_ratio)
+                self.y_speed = int(self.y_speed * brake_ratio)
+                
+                #小さい時は0にしてしまう
+                if abs(self.x_speed) < 5:
+                    self.x_speed = 0
+                if abs(self.y_speed) < 5:
+                    self.y_speed = 0
+
+            x_diff = self.x_speed * passed_seconds
+            y_diff = self.y_speed * passed_seconds
+        
+            print((self.x_speed, self.y_speed))
 
             #方向固定
             if pressed_keys[K_z]:
@@ -193,7 +243,7 @@ class Bullet(pygame.sprite.Sprite):
             
             #壁との衝突予定ポイントを計算
             #衝突を検知するrectの大きさ
-            max_detect = 2000
+            max_detect = 5000
             if tank.way == 'up' or tank.way == 'down':
                 detect_rect = self.rect.inflate(0, max_detect)
             else:
@@ -526,6 +576,8 @@ if __name__ == '__main__':
             #初期化(一回のみ)
             if state == 'init':
                 #オブジェクト・敵データ初期化
+                start_x = int(raw_input('START X> '))
+                start_y = int(raw_input('Y> '))
                 enemy_list = list()
                 all_sprites = pygame.sprite.RenderUpdates()
                 tanks = pygame.sprite.RenderUpdates()
@@ -598,15 +650,15 @@ if __name__ == '__main__':
             elif state == 'wait':
                 #サーバから承認されて開始データが来るまで待機
                 start_data = urllib2.urlopen('http://%s/check_start?wait_id=%s'%(server_addr,wait_id)).read()
-                print start_data
-                if start_data=='waiting':
+                start_data = json.loads(start_data)
+                if start_data['state']=='wait':
+                    print('... ',)
                     time.sleep(1)
-                else:
-                    start_data = json.loads(start_data)
+                elif start_data['state']=='start':
                     #敵データ
-                    members = start_data['users'][0]
+                    members = start_data['users']
                     #ステージデータ
-                    maze = start_data['users'][1]
+                    maze = start_data['maze']
                     #各戦車のステータス
                     tank_data = start_data['data']
 
@@ -618,10 +670,14 @@ if __name__ == '__main__':
                         bullet_per_sec = int(tank_id_data['bullet_per_sec'])
                         hp = int(tank_id_data['hp'])
                         bullet_damage = int(tank_id_data['bullet_damage'])
+                        accel_ratio = float(tank_id_data['accel_ratio'])
+                        brake_ratio = float(tank_id_data['brake_ratio'])
+                        
                         if member['wait_id'] == wait_id:
                             #自機obj生成
                             mytank = Tank(screen_width/2,screen_height/2,'right',
-                                        tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage, tank_id, True)
+                                        tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage, tank_id, True,
+                                        accel_ratio, brake_ratio)
                         else:
                             #敵obj生成
                             enemy_list.append({
@@ -633,6 +689,11 @@ if __name__ == '__main__':
                     ipaddr_list = list()
                     for enemy in enemy_list:
                         ipaddr_list.append(enemy['ipaddr'])
+                        
+                    #remove
+                    #
+                    mytank.relative_x = start_x
+                    mytank.relative_y = start_y
 
                     state = 'play'
 
@@ -660,11 +721,13 @@ if __name__ == '__main__':
                 
                 #固定obj(壁,アダプタ)と機体との当たり判定
                 if pygame.sprite.spritecollideany(mytank, walls) \
-                        or pygame.sprite.spritecollideany(mytank, adapters):
+                        or pygame.sprite.spritecollideany(mytank, adapters) \
+                        or len(pygame.sprite.spritecollide(mytank, tanks, False))>1:
                     mytank.relative_x = last_relative_x
                     mytank.relative_y = last_relative_y
                     walls.update(mytank.relative_x, mytank.relative_y)
                     adapters.update(mytank.relative_x, mytank.relative_y)
+                    tanks.update(mytank.relative_x, mytank.relative_y)
 
                 #機体が動いた場合に送信
                 if last_relative_x != mytank.relative_x or \

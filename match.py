@@ -16,34 +16,14 @@ def set_db(db):
         pickle.dump(db,f)
 
 db = get_db()
-print db
 wait_num = len(db['wait_list'])
-if wait_num < 2:
-    match_num_list = [0,]
-elif wait_num == 2:
-    match_num_list = [0,1]
-elif wait_num == 3:
-    match_num_list = [0,1]
-elif wait_num >= 4:
-    match_num_list = [1,]
 
-if not wait_num < 2:
-    db['wait_list'].sort(key=lambda x:x['score'])
-    players_num_list = list()
-    carry = wait_num % max(match_num_list)
-    players_for_match = wait_num / max(match_num_list)
-    #人数配分
-    while wait_num:
-        wait_num -= players_for_match
-        if wait_num and wait_num < players_for_match:
-            players_for_match += carry
-        players_num_list.append(players_for_match)
-
-    for players_num in players_num_list:
-        maze = Maze(maze_x, maze_y).__str__()
-        match_players = db['wait_list'][0:players_num]
-        db['start_list'].append([match_players,maze])
-        del db['wait_list'][0:players_num]
+if wait_num > 2:
+    maze = Maze(maze_x, maze_y).__str__()
+    match_players = db['wait_list']
+    db['start_list'].append([match_players,maze])
+    db['wait_list'] = list()
     
     set_db(db)
-    print db
+
+print('{}players matched'.format(wait_num))

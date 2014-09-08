@@ -12,11 +12,13 @@ app = Flask(__name__)
 
 tank_list = [
     {
-    'tank_speed':400,
-    'bullet_speed':900,
+    'tank_speed':400.0,
+    'bullet_speed':900.0,
     'bullet_damage':20,
     'hp':600,
-    'bullet_per_sec':4},
+    'bullet_per_sec':4,
+    'accel_ratio':300,
+    'brake_ratio':0.7},
     {
     'tank_speed':350,
     'bullet_speed':500,
@@ -29,6 +31,8 @@ tank_list = [
     'bullet_damage':40,
     'hp':900,
     'bullet_per_sec':1.5}]
+    
+wait_json = json.dumps({'state':'wait'})
 
 def get_db():
     with open(pickledb_name,'r') as f:
@@ -66,7 +70,7 @@ def check_start():
     for start in db['start_list']:
         for user in start[0]:
             if wait_id == user['wait_id'] :
-                return json.dumps({'users':start,'data':tank_list})
-    return 'waiting'
+                return json.dumps({'state':'start','users':start[0],'maze':start[1],'data':tank_list})
+    return wait_json
     
 app.run('0.0.0.0',debug=True)
