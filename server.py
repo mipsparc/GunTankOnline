@@ -32,6 +32,7 @@ tank_list = [
     'hp':900,
     'bullet_per_sec':1.5}]
     
+    
 wait_json = json.dumps({'state':'wait'})
 
 def get_db():

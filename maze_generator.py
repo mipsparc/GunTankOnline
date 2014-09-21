@@ -215,12 +215,12 @@ if __name__ == "__main__":
 
   try:
     if n_rows > 0:
-      print Maze( n_rows, n_cols )
+      print(Maze( n_rows, n_cols ))
     else:
       maze = Maze( abs(n_rows), abs(n_cols) )
-      print maze.as_html_table()
+      print(maze.as_html_table())
   except MemoryError:
-    print "Sorry, n_rows, n_cols were too big"
+    print("Sorry, n_rows, n_cols were too big")
 
 
 # EOF
