@@ -11,6 +11,7 @@ import time
 import random
 import urllib2
 from textbox import TextBox, Button
+import pyganim
 
 
 class Tank(pygame.sprite.Sprite):
@@ -304,6 +305,7 @@ class Bullet(pygame.sprite.Sprite):
         self.colid_point = colid_point
 
     def update(self, relative_x, relative_y):
+        global struckted_bullet_list
         passed_seconds = self.clock.tick()/1000.0
 
         if self.way == 'up':
@@ -322,23 +324,31 @@ class Bullet(pygame.sprite.Sprite):
                     or self.way == 'down' and self.default_y>=self.colid_point:
             bullets.remove(self)
             all_sprites.remove(self)
+            Explode(self.default_x, self.default_y)
         
         #自機に衝突時
         if not self.tank.center and pygame.sprite.collide_rect(self, mytank):
             mytank.struck(self.bullet_damage)
             bullets.remove(self)
             all_sprites.remove(self)
+            #x,yは弾が被弾したポイント
             send_queue.put({
                     'ipaddr_list':ipaddr_list,
                     'type':'struck',
                     'bullet_id':self.bullet_id,
-                    'hp':mytank.hp
+                    'hp':mytank.hp,
+                    'x':self.default_x,
+                    'y':self.default_y
                     })
+            Explode(self.default_x, self.default_y)
+            
         #敵が被弾した弾を削除
-        if self.bullet_id in struckted_bullet_list:
-            bullets.remove(self)
-            all_sprites.remove(self)
-            struckted_bullet_list.remove(self.bullet_id)
+        for struckted_bullet in struckted_bullet_list:
+            if self.bullet_id == struckted_bullet[0]:
+                bullets.remove(self)
+                all_sprites.remove(self)
+                Explode(struckted_bullet[1], struckted_bullet[2])
+        struckted_bullet_list = list()
 
         self.rect.x = self.default_x - relative_x
         self.rect.y = self.default_y - relative_y
@@ -519,6 +529,25 @@ def make_field(maze, wall_width, wall_height, adapter_width, adapter_height):
     print('field:',field_x,field_y)
     return current_x, current_y - wall_width
 
+
+class Explode(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+        
+        self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in explode_anim_imgs], loop=False)
+        self.rect = explode_anim_imgs[0].get_rect()
+        
+        self.default_x = x
+        self.default_y = y
+        
+        self.explode_anim.play()
+        
+    def update(self, relative_x, relative_y):
+        self.explode_anim.blit(screen, (self.default_x - relative_x - self.rect.width/2,
+                                        self.default_y - relative_y - self.rect.height/2))
+        if self.explode_anim.isFinished():
+            animes.remove(self)
+
 #
 #転送周り
 def send(send_queue, send_port):
@@ -568,7 +597,9 @@ def enemy_struck(receive_data, ipaddr):
     for enemy in enemy_list:
         if enemy['ipaddr'] == ipaddr:
             enemy['obj'].hp = receive_data['hp']
-    struckted_bullet_list.append(receive_data['bullet_id'])
+    struckted_bullet_list.append((receive_data['bullet_id'],
+                                  receive_data['x'],
+                                  receive_data['y']))
 
 #初期位置の候補をランダムに
 def init_place(field_x, field_y, wall_width):
@@ -634,7 +665,19 @@ if __name__ == '__main__':
     #HPバー
     hp_green_img = pygame.image.load('./imgs/hp_green.png').convert_alpha()
     hp_red_img = pygame.image.load('./imgs/hp_red.png').convert_alpha()
-
+    hpback_img = pygame.image.load('./imgs/hpback.png').convert_alpha()
+    #HP/名前の背景
+    statusback_img = pygame.image.load('./imgs/statusback.png').convert_alpha()
+    #自機ステータス
+    mystatusback_img = pygame.image.load('./imgs/mystatusback.png').convert()
+    mystatus_x = 630
+    mystatus_y = 600
+    myhp_green_img = pygame.image.load('./imgs/myhp_green.png').convert()
+    myhp_red_img = pygame.image.load('./imgs/myhp_red.png').convert()
+    myhpbarback_img = pygame.image.load('./imgs/myhpback.png').convert()
+    
+    #爆発アニメ
+    explode_anim_imgs = [pygame.image.load('./imgs/explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
 
     #TODO グラフィック番号変更可能に
     #戦車のグラフィック番号
@@ -663,6 +706,10 @@ if __name__ == '__main__':
     
     title_font = pygame.font.Font('ipagp.ttf',70)
     tankname_font = pygame.font.Font('ipagp.ttf', 20)
+    mystatus_font = pygame.font.Font('ipagp.ttf', 30)
+    myhp_descript =  mystatus_font.render('HP', True, (255,255,255))
+    myshot_descript =  mystatus_font.render('Shot', True, (255,255,255))
+    mybomb_descript =  mystatus_font.render('Bomb', True, (255,255,255))
 
     quit = False
     state = 'init'
@@ -691,6 +738,8 @@ if __name__ == '__main__':
                 RadarWall.containers = all_sprites, radarwalls
                 radartanks = pygame.sprite.RenderUpdates()
                 RadarTank.containers = all_sprites, radartanks
+                animes = pygame.sprite.RenderUpdates()
+                Explode.containers = animes
                 
                 #敵が被弾した弾リスト初期化
                 struckted_bullet_list = list()
@@ -865,8 +914,6 @@ if __name__ == '__main__':
                                 'x':mytank.x,
                                 'y':mytank.y,
                                 'way':mytank.way})
-                            #TEST
-                            print(mytank.x,mytank.y)
                 
                 #レーダーの機体を更新
                 radartanks.update()
@@ -877,17 +924,30 @@ if __name__ == '__main__':
                 tanks.draw(screen)
                 walls.draw(screen)
                 adapters.draw(screen)
-                screen.blit(radar_img, (radar_init_x, radar_init_y)) #レーダー画面
-                radartanks.draw(screen)
-                radarwalls.draw(screen)
+                
+                #アニメーションを更新
+                animes.update(mytank.relative_x, mytank.relative_y)
                 
                 #自機死亡・全滅確認
                 died_list = list()
                 for enemy_data in enemy_list:
                     #TODO tankname 動的取得
-                    tankname = 'NAMETEST'
+                    tankname = 'NAME1'
                     
                     enemy = enemy_data['obj']
+                    
+                    #HP/ネーム背景
+                    status_x = enemy.rect.x - 30
+                    status_y = enemy.rect.y - 55
+                    screen.blit(statusback_img, (status_x, status_y))
+                    
+                    #ユーザー名描画
+                    tankname_surface = tankname_font.render(tankname, True, (255, 255, 255))
+                    screen.blit(tankname_surface, (status_x + 10, status_y + 5))
+                    
+                    #HPバー背景(削れたぶん)
+                    screen.blit(hpback_img, (status_x + 10, status_y + 30))
+                    
                     #HPバー
                     hp_percent = (float(enemy.hp) / enemy.default_hp)*100
                     if hp_percent > 40:
@@ -895,13 +955,8 @@ if __name__ == '__main__':
                     else:
                         hpbar_img = hp_red_img
                     hpbar_length = int((hp_percent/100) * hp_green_img.get_width())
-                    hpbar_rect = pygame.Rect(0, 0, hpbar_length, hp_green_img.get_height())
-                    screen.blit(hpbar_img, (enemy.rect.x - 10, enemy.rect.y - 20)
-                                ,area=hpbar_rect)
-                    
-                    #ネーム描画
-                    tankname_surface = tankname_font.render(tankname, True, (255, 255, 255))
-                    screen.blit(tankname_surface, (enemy.rect.x - 10, enemy.rect.y - 45))
+                    screen.blit(hpbar_img, (status_x + 10, status_y + 30),
+                                area=pygame.Rect(0, 0, hpbar_length, hp_green_img.get_height()))
                     
                     if enemy.hp <= 0:
                         died_list.append(True)
@@ -911,7 +966,32 @@ if __name__ == '__main__':
                 if not False in died_list or mytank.hp <= 0:
                     print('died')
                     state = 'init'
-
+                    
+                #レーダー描画
+                screen.blit(radar_img, (radar_init_x, radar_init_y)) #レーダー画面
+                radartanks.draw(screen)
+                radarwalls.draw(screen)
+                
+                #自機ステータス表示
+                screen.blit(mystatusback_img, (mystatus_x, mystatus_y))
+                #自機HP
+                screen.blit(myhp_descript, (mystatus_x + 5, mystatus_y + 5))
+                screen.blit(myhpbarback_img, (mystatus_x + 105, mystatus_y + 5))
+                myhp_percent = (float(mytank.hp) / mytank.default_hp)*100
+                if myhp_percent > 40:
+                    myhpbar_img = myhp_green_img
+                else:
+                    myhpbar_img = myhp_red_img
+                myhpbar_length = int((myhp_percent/100) * myhp_green_img.get_width())
+                screen.blit(myhpbar_img, (mystatus_x + 105, mystatus_y + 5),
+                            area=pygame.Rect(0, 0, myhpbar_length, myhp_green_img.get_height()))
+                            
+                #ショットたまり具合
+                screen.blit(myshot_descript, (mystatus_x + 5, mystatus_y + 40))
+                
+                #ボム数
+                screen.blit(mybomb_descript, (mystatus_x + 5, mystatus_y + 75))
+                
             pygame.display.update()
             clock.tick(30)
             
