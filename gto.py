@@ -3,6 +3,7 @@
 #NOTICE: REMOVE TEST BEFORE LAUNCH
 
 import pygame
+pygame.init()
 from pygame.locals import *
 import socket
 import json
@@ -12,6 +13,7 @@ import random
 import urllib2
 from textbox import TextBox, Button
 import pyganim
+from math import ceil #切り上げ
 
 
 class Tank(pygame.sprite.Sprite):
@@ -358,11 +360,8 @@ class Wall(pygame.sprite.Sprite):
     def __init__(self, x, y, way):
         pygame.sprite.Sprite.__init__(self, self.containers)
 
-        self.get_img()
-        if way == 'landscape':
-            self.image = self.wall_landscape
-        elif way == 'portrait':
-            self.image = self.wall_portrait
+        self.way = way
+        self.set_img()
 
         self.width = self.image.get_width()
         self.height = self.image.get_height()
@@ -371,31 +370,33 @@ class Wall(pygame.sprite.Sprite):
         self.rect.y = y
         self.default_x = x
         self.default_y = y
-        self.way = way
 
     def update(self, relative_x, relative_y):
         self.rect.x = self.default_x - relative_x
         self.rect.y = self.default_y - relative_y
 
-    def get_img(self):
-        self.wall_landscape = pygame.image.load('./imgs/wall.png').convert()
-        self.wall_portrait = pygame.transform.rotate(self.wall_landscape, 90)
+    def set_img(self):
+        if self.way == 'landscape':
+            self.image = wall_landscape
+        elif self.way == 'portrait':
+            self.image = wall_portrait
 
 
 class OuterWall(Wall):
-    def get_img(self):
-        self.wall_landscape = pygame.image.load('./imgs/outer_wall.png').convert()
-        self.wall_portrait = pygame.transform.rotate(self.wall_landscape, 90)
+    def set_img(self):
+        if self.way == 'landscape':
+            self.image = outer_wall_landscape
+        elif self.way == 'portrait':
+            self.image = outer_wall_portrait
 
 
 class Adapter(pygame.sprite.Sprite):
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self, self.containers)
 
-        self.get_img()
+        self.set_img()
 
         self.way = 'landscape'
-        self.image = self.adapter_image
         self.width = self.image.get_width()
         self.height = self.image.get_height()
         self.rect = self.image.get_rect()
@@ -407,14 +408,14 @@ class Adapter(pygame.sprite.Sprite):
     def update(self, relative_x, relative_y):
         self.rect.x = self.default_x - relative_x
         self.rect.y = self.default_y - relative_y
-
-    def get_img(self):
-        self.adapter_image = pygame.image.load('./imgs/adapter.png').convert()
+        
+    def set_img(self):
+        self.image = adapter_image
 
 
 class OuterAdapter(Adapter):
-    def get_img(self):
-        self.adapter_image = pygame.image.load('./imgs/outer_adapter.png').convert()
+    def set_img(self):
+        self.image = outer_adapter_image
         
         
 class RadarWall(pygame.sprite.Sprite):
@@ -427,7 +428,7 @@ class RadarWall(pygame.sprite.Sprite):
         elif way == 'portrait':
             self.image = self.wall_portrait
         elif way == 'adapter':
-            self.image = self.adapter_img
+            self.image = self.adapter_image
             
         self.rect = self.image.get_rect()
         x += radar_init_x
@@ -438,7 +439,7 @@ class RadarWall(pygame.sprite.Sprite):
     def get_img(self):
         self.wall_landscape = pygame.image.load('./imgs/radarwall.png').convert_alpha()
         self.wall_portrait = pygame.transform.rotate(self.wall_landscape, 90)
-        self.adapter_img = pygame.image.load('./imgs/radaradapter.png').convert_alpha()
+        self.adapter_image = pygame.image.load('./imgs/radaradapter.png').convert_alpha()
         
 class RadarTank(pygame.sprite.Sprite):
     def __init__(self, tank):
@@ -469,10 +470,8 @@ class RadarTank(pygame.sprite.Sprite):
             self.image = pygame.image.load('./imgs/radartank.png').convert_alpha()
 
 
-#フィールド作成
-def make_field(maze, wall_width, wall_height, adapter_width, adapter_height):
-    maze_x = 10
-    maze_y = 10
+#壁,アダプタ(レーダーのも)作成
+def make_field(maze, maze_x, maze_y):
     field_x = (wall_width + wall_height) * maze_x - wall_height
     field_y = (wall_width + wall_height) * maze_y - wall_height
     current_y = 0
@@ -529,7 +528,31 @@ def make_field(maze, wall_width, wall_height, adapter_width, adapter_height):
     print('field:',field_x,field_y)
     return current_x, current_y - wall_width
 
+#地面を作成
+def make_ground(maze_x, maze_y):
+    #inner
+    offset_x = wall_height/2
+    offset_y = wall_width + wall_height/2
+    current_y = offset_y
+    for i in range(maze_y):
+        current_x = offset_x
+        for n in range(maze_x):
+            Ground(current_x, current_y)
+            current_x += ground_width
+        current_y += ground_height
+        
+    #outer(背景)
+    ground_x_num = int(ceil(float(screen_width) / ground_width))
+    ground_y_num = int(ceil(float(screen_height) / ground_height))
+    current_y = 0
+    for i in range(ground_y_num):
+        current_x = 0
+        for n in range(ground_x_num):
+            OuterGround(current_x, current_y)
+            current_x += ground_width
+        current_y += ground_height
 
+#爆発エフェクト
 class Explode(pygame.sprite.Sprite):
     def __init__(self, x, y):
         pygame.sprite.Sprite.__init__(self, self.containers)
@@ -547,6 +570,35 @@ class Explode(pygame.sprite.Sprite):
                                         self.default_y - relative_y - self.rect.height/2))
         if self.explode_anim.isFinished():
             animes.remove(self)
+            
+#床
+class Ground(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+        self.set_img()
+
+        self.width = self.image.get_width()
+        self.height = self.image.get_height()
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.default_x = x
+        self.default_y = y
+
+    def update(self, relative_x, relative_y):
+        self.rect.x = self.default_x - relative_x
+        self.rect.y = self.default_y - relative_y
+
+    def set_img(self):
+        self.image = ground_image
+        
+        
+class OuterGround(Ground):
+    def update(self):
+        pass
+    
+    def set_img(self):
+        self.image = outer_ground_image
 
 #
 #転送周り
@@ -643,20 +695,33 @@ if __name__ == '__main__':
     bullet_id_file = ('./imgs/0_bullet.png','./imgs/1_bullet.png',
                       './imgs/2_bullet.png','./imgs/3_bullet.png')
     
-    pygame.init()
+    #フィールドサイズ
+    maze_x = 10
+    maze_y = 10
+    
     screen = pygame.display.set_mode([screen_width, screen_height])
 
     pygame.display.set_caption('GTO -Gun Tank Online-')
     clock = pygame.time.Clock()
 
-    wall_width = pygame.image.load('./imgs/wall.png').get_width()
-    wall_height = pygame.image.load('./imgs/wall.png').get_height()
-    adapter_height = pygame.image.load('./imgs/adapter.png').get_height()
-    adapter_width = pygame.image.load('./imgs/adapter.png').get_width()
-    radarwall_width = pygame.image.load('./imgs/radarwall.png').get_width()
-    radarwall_height = pygame.image.load('./imgs/radarwall.png').get_height()
+    #各パーツの寸法をチェック
+    check_img = pygame.image.load('./imgs/wall.png')
+    wall_width = check_img.get_width()
+    wall_height = check_img.get_height()
     
-    #レーダー関連
+    check_img = pygame.image.load('./imgs/adapter.png')
+    adapter_width = check_img.get_width()
+    adapter_height = check_img.get_height()
+    
+    check_img = pygame.image.load('./imgs/radarwall.png')
+    radarwall_width = check_img.get_width()
+    radarwall_height = check_img.get_height()
+    
+    check_img = pygame.image.load('./imgs/ground.png')
+    ground_width = check_img.get_width()
+    ground_height = check_img.get_height()
+    
+    #レーダー背景
     radar_img = pygame.image.load('./imgs/radar.png').convert_alpha()
     #レーダー表示位置
     radar_init_x = 700
@@ -740,6 +805,10 @@ if __name__ == '__main__':
                 RadarTank.containers = all_sprites, radartanks
                 animes = pygame.sprite.RenderUpdates()
                 Explode.containers = animes
+                grounds = pygame.sprite.RenderUpdates()
+                Ground.containers = grounds
+                outergrounds = pygame.sprite.RenderUpdates()
+                OuterGround.containers = outergrounds
                 
                 #敵が被弾した弾リスト初期化
                 struckted_bullet_list = list()
@@ -837,7 +906,18 @@ if __name__ == '__main__':
                                 'obj':Tank(0,0,'right',tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage,tank_id),
                                 'ipaddr':member['ip_addr']})
 
-                    field_x, field_y = make_field(maze, wall_width, wall_height, adapter_width, adapter_height)
+                    #画像準備
+                    wall_landscape = pygame.image.load('./imgs/wall.png').convert()
+                    wall_portrait = pygame.transform.rotate(wall_landscape, 90)
+                    outer_wall_landscape = pygame.image.load('./imgs/outer_wall.png').convert()
+                    outer_wall_portrait = pygame.transform.rotate(outer_wall_landscape, 90)
+                    adapter_image = pygame.image.load('./imgs/adapter.png').convert()
+                    outer_adapter_image = pygame.image.load('./imgs/outer_adapter.png').convert()
+                    ground_image = pygame.image.load('./imgs/ground.png').convert()
+                    outer_ground_image = pygame.image.load('./imgs/outer_ground.png').convert()
+
+                    field_x, field_y = make_field(maze, maze_x, maze_y)
+                    make_ground(maze_x, maze_y)
 
                     ipaddr_list = list()
                     for enemy in enemy_list:
@@ -884,6 +964,8 @@ if __name__ == '__main__':
                 walls.update(mytank.relative_x, mytank.relative_y)
                 adapters.update(mytank.relative_x, mytank.relative_y)
                 bullets.update(mytank.relative_x, mytank.relative_y)
+                grounds.update(mytank.relative_x, mytank.relative_y)
+                outergrounds.update()
                 
                 #固定obj(壁,アダプタ),他の機体と機体との当たり判定
                 if pygame.sprite.spritecollideany(mytank, walls) \
@@ -920,6 +1002,8 @@ if __name__ == '__main__':
                 
                 #描画
                 screen.fill((187, 127, 90))
+                outergrounds.draw(screen)
+                grounds.draw(screen)
                 bullets.draw(screen)
                 tanks.draw(screen)
                 walls.draw(screen)
