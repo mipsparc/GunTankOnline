@@ -1,16 +1,25 @@
 #coding:utf-8
 #default:port5000でlisten
+#list:waitlist
+#dict:battlelist
+#bool:wait_for_start
+#int:start_time,battle_id
 from flask import Flask
 from flask import request
 import pickle
 import time
+import datetime
 import json
 import random
+from maze_generator import Maze
 
-pickledb_name = 'pickledb.dat'
+db_name = 'userdb.dat'
 app = Flask(__name__)
 
-tank_list = [
+maze_x = 10
+maze_y = 10
+
+tank_dataset = [
     {
     'tank_speed':400.0,
     'bullet_speed':900.0,
@@ -33,45 +42,73 @@ tank_list = [
     'bullet_per_sec':1.5}]
     
     
-wait_json = json.dumps({'state':'wait'})
-
 def get_db():
-    with open(pickledb_name,'r') as f:
+    with open(db_name,'r') as f:
         db = pickle.load(f)
     return db
 
 def set_db(db):
-    with open(pickledb_name,'w') as f:
+    with open(db_name,'w') as f:
         pickle.dump(db,f)
 
 @app.route('/time')
 def give_time():
     return str(time.time())
 
-@app.route('/add_wait')
-def add_wait():
-    user_id = request.args['id']
-    password = request.args['pass']
-    tank_id = int(request.args['tank_id'])
-    wait_id = str(random.randint(1,99999999))
-    ip_addr = request.args['ipaddr']
-    print ip_addr
+#参戦
+#query:json
+#json:ipaddr,port,tank_id,[user_id,password]
+@app.route('/attend')
+def attend():
     db = get_db()
-    for user in db['user_list']:
-        if user['user_id'] == user_id and user['pass'] == password:
-            db['wait_list'].append({'user_id':user_id,'score':user['score'],'tank_id':tank_id,'wait_id':wait_id,'ip_addr':ip_addr,'time':time.time()})
-            set_db(db)
-            return wait_id
-    return 'error'
+    data = json.loads(request.args['json'])
+    ipaddr = data['ipaddr']
+    port = data['port']
+    tank_id = data['tank_id']
+    user_id = data.get('user_id')
+    password = data.get('password')
 
-@app.route('/check_start')
-def check_start():
-    wait_id = request.args['wait_id']
+    session_id = random.randint(1,99999999)
+    
+    if db['wait_for_start'] and db['start_time'] <= time.time():
+        print('cleared waitlist')
+        db['wait_for_start'] = False
+        db['battle_id'] = random.randint(1,99999999)
+        db['start_time'] = None
+        db['waitlist'] = list()
+    
+    db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id, 'session_id':session_id})
+    set_db(db)
+    
+    return json.dumps({'session_id':session_id})
+
+#待機人数と開始時刻の確認
+@app.route('/check')
+def check():
     db = get_db()
-    for start in db['start_list']:
-        for user in start[0]:
-            if wait_id == user['wait_id'] :
-                return json.dumps({'state':'start','users':start[0],'maze':start[1],'data':tank_list})
-    return wait_json
+    waiting = len(db['waitlist'])
+    if not db['wait_for_start'] and waiting >= 2:
+        db['wait_for_start'] = True
+        #1分後に開始時刻設定
+        #TEST 10秒に
+        db['start_time'] = time.time() + 10
+        
+    set_db(db)
+
+    return json.dumps({'start':db['wait_for_start'], 'waiting':waiting, 'start_time':db['start_time'], 'battle_id':db['battle_id']})
+
+#query:battle_id
+@app.route('/start')
+def start():
+    db = get_db()
+    battle_id = request.args['battle_id']
+    #そのバトルが初回アクセス時
+    if not battle_id in db['battlelist']:
+        maze = Maze(maze_x, maze_y).__str__()
+        db['battlelist'][battle_id] = [maze, db['waitlist']]
+        set_db(db)
+    
+    return json.dumps(db['battlelist'][battle_id]+[tank_dataset])
+    
     
 app.run('0.0.0.0',debug=True)

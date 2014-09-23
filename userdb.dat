@@ -1,0 +1,17 @@
+(dp0
+S'battlelist'
+p1
+(dp2
+sS'wait_for_start'
+p3
+I00
+sS'start_time'
+p4
+I0
+sS'battle_id'
+p5
+I0
+sS'waitlist'
+p6
+(lp7
+s.
