@@ -19,6 +19,12 @@ app = Flask(__name__)
 maze_x = 10
 maze_y = 10
 
+stage_list = list()
+
+for i in range(1):
+    with open('stage/stage{}.txt'.format(i)) as f:
+        stage_list.append(f.read())
+
 tank_dataset = [
     {
     'tank_speed':400.0,
@@ -29,17 +35,45 @@ tank_dataset = [
     'accel_ratio':300,
     'brake_ratio':0.7},
     {
-    'tank_speed':350,
-    'bullet_speed':500,
-    'bullet_damage':30,
-    'hp':750,
-    'bullet_per_sec':1.7},
-    {
-    'tank_speed':300,
-    'bullet_speed':450,
+    'tank_speed':200.0,
+    'bullet_speed':900.0,
     'bullet_damage':40,
-    'hp':900,
-    'bullet_per_sec':1.5}]
+    'hp':800,
+    'bullet_per_sec':2,
+    'accel_ratio':200,
+    'brake_ratio':0.7},
+    {
+    'tank_speed':600.0,
+    'bullet_speed':900.0,
+    'bullet_damage':15,
+    'hp':400,
+    'bullet_per_sec':6,
+    'accel_ratio':300,
+    'brake_ratio':0.7},
+    {
+    'tank_speed':600.0,
+    'bullet_speed':900.0,
+    'bullet_damage':15,
+    'hp':400,
+    'bullet_per_sec':6,
+    'accel_ratio':300,
+    'brake_ratio':0.7},
+    {
+    'tank_speed':600.0,
+    'bullet_speed':900.0,
+    'bullet_damage':15,
+    'hp':400,
+    'bullet_per_sec':6,
+    'accel_ratio':300,
+    'brake_ratio':0.7},
+    {
+    'tank_speed':600.0,
+    'bullet_speed':900.0,
+    'bullet_damage':15,
+    'hp':400,
+    'bullet_per_sec':6,
+    'accel_ratio':300,
+    'brake_ratio':0.7}]
     
     
 def get_db():
@@ -104,11 +138,17 @@ def start():
     battle_id = request.args['battle_id']
     #そのバトルが初回アクセス時
     if not battle_id in db['battlelist']:
-        maze = Maze(maze_x, maze_y).__str__()
-        db['battlelist'][battle_id] = [maze, db['waitlist']]
+        print(stage_list)
+        stage = random.choice(stage_list)
+        db['battlelist'][battle_id] = [stage, db['waitlist']]
         set_db(db)
     
     return json.dumps(db['battlelist'][battle_id]+[tank_dataset])
+
+#tank_dataset を返す
+@app.route('/tankdata')
+def tankdata():
+    return json.dumps(tank_dataset)
     
     
 app.run('0.0.0.0',debug=True)

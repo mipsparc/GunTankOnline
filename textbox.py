@@ -1,7 +1,7 @@
 #coding:utf-8
 import pygame
 
-class TextBox:
+class TextBox(object):
     def __init__(self, rect, width=1):
         self.selected = False
         self.font_size = 60
@@ -49,19 +49,20 @@ class TextBox:
         pygame.draw.rect(scr, self.color, self.rect, width)
         scr.blit(label, self.rect)
        
-class Button:
+class Button(object):
     def __init__(self, text, rect):
         self.text = text
         self.is_hover = False
         self.default_color = (150,150,150)
         self.hover_color = (255,255,255)
         self.font_color = (0,0,0)
+        rect.width = self.label().get_width()
         self.rect = rect
        
     def label(self):
         '''button label font'''
-        font = pygame.font.Font('ipagp.ttf', 90)
-        return font.render(self.text, 1, self.font_color)
+        font = pygame.font.Font('ipagp.ttf', 70)
+        return font.render(self.text, True, self.font_color)
        
     def color(self):
         '''change color when hovering'''
@@ -83,4 +84,3 @@ class Button:
             self.is_hover = True
         else:
             self.is_hover = False
-

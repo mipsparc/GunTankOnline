@@ -182,6 +182,7 @@ class Tank(pygame.sprite.Sprite):
             self.image = self.right_image
 
     def fire(self, speed, bullet_id=None, colid_point=None):
+        global fired_bullet_list
         if self.center:
             bullet_id = random.randint(1, 99999999)
             bullet = Bullet(self, speed, bullet_id, self.bullet_damage)
@@ -197,11 +198,28 @@ class Tank(pygame.sprite.Sprite):
                 'speed':speed,
                 'colid_point':bullet.colid_point,
                 })
+            #自分が打った弾リスト
+            fired_bullet_list.append(bullet_id)
         else:
             Bullet(self, speed,bullet_id, self.bullet_damage, colid_point)
 
-    def struck(self, bullet_damage):
-        self.hp -= bullet_damage
+    def struck(self, bullet_damage=None):
+        if self.center:
+            self.hp -= bullet_damage
+        if self.hp <= 0:
+            self.origin_image = pygame.image.load(diedtank_id_file[tank_id]).convert_alpha()
+            if self.way == 'up':
+                self.up_image = pygame.transform.rotate(self.origin_image, 270)
+                self.image = self.up_image
+            elif self.way == 'down':
+                self.down_image = pygame.transform.rotate(self.origin_image, 90)
+                self.image = self.down_image
+            elif self.way == 'left':
+                self.image = self.origin_image
+            elif self.way == 'right':
+                self.right_image = pygame.transform.rotate(self.origin_image, 180)
+                self.image = self.right_image
+            
 
 
 class Bullet(pygame.sprite.Sprite):
@@ -285,6 +303,7 @@ class Bullet(pygame.sprite.Sprite):
             detect_sprite.rect = detect_rect
             #衝突予定rect
             strike_sprites = pygame.sprite.spritecollide(detect_sprite, walls, False)
+            strike_sprites += pygame.sprite.spritecollide(detect_sprite, adapters, False)
             #衝突する可能性のあるxまたはy座標のリスト
             colid_points = list()
             for strike_sprite in strike_sprites:
@@ -299,10 +318,13 @@ class Bullet(pygame.sprite.Sprite):
                     elif strike_sprite.way == 'portrait':
                         colid_points.append(strike_sprite.default_y + strike_sprite.width)
 
-            if self.way == 'down' or self.way == 'right':
-                colid_point = min(colid_points)
-            else:
-                colid_point = max(colid_points)
+            try:
+                if self.way == 'down' or self.way == 'right':
+                    colid_point = min(colid_points)
+                else:
+                    colid_point = max(colid_points)
+            except ValueError:
+                colid_point = (0, 0)
                 
         else:
             self.rect.x = self.default_x - mytank.relative_x
@@ -313,6 +335,7 @@ class Bullet(pygame.sprite.Sprite):
 
     def update(self, relative_x, relative_y):
         global struckted_bullet_list
+        global fired_bullet_list
         passed_seconds = self.clock.tick()/1000.0
 
         if self.way == 'up':
@@ -332,6 +355,11 @@ class Bullet(pygame.sprite.Sprite):
             bullets.remove(self)
             all_sprites.remove(self)
             Explode(self.default_x, self.default_y)
+            #自分が発射した弾丸なら発射済みリストから削除
+            try:
+                fired_bullet_list.remove(self.bullet_id)
+            except ValueError:
+                pass
         
         #自機に衝突時
         if not self.tank.center and pygame.sprite.collide_rect(self, mytank):
@@ -482,6 +510,8 @@ def make_field(maze, maze_x, maze_y):
     current_y = 0
     maze_lines = maze.split('\n')
     radar_current_y = 0
+    #1つ前の文字が' 'ならスペースの幅を壁と同じに
+    last_char = None
     for line_num, line in enumerate(maze_lines):
         current_x = 0
         radar_current_x = 0
@@ -496,8 +526,12 @@ def make_field(maze, maze_x, maze_y):
 
             #文字列パース
             if s == ' ':
-                current_x += wall_width
-                radar_current_x += radarwall_width
+                if last_char == ' ':
+                    current_x += wall_height
+                    radar_current_x += radarwall_height
+                else:
+                    current_x += wall_width
+                    radar_current_x += radarwall_width
             elif s == '_':
                 RadarWall(radar_current_x, radar_current_y + radarwall_width, 'landscape')
                 if not(outer_char or outer_line):
@@ -526,6 +560,11 @@ def make_field(maze, maze_x, maze_y):
                     OuterAdapter(current_x, current_y + wall_width)
                     current_x += wall_height
                 radar_current_x += radarwall_height
+                
+            if last_char==s and s ==' ':
+                last_char = None
+            else:
+                last_char = s
 
         radar_current_y += radarwall_width
         current_y += wall_width
@@ -654,9 +693,21 @@ def enemy_struck(receive_data, ipaddr):
     for enemy in enemy_list:
         if enemy['ipaddr'] == ipaddr:
             enemy['obj'].hp = receive_data['hp']
-    struckted_bullet_list.append((receive_data['bullet_id'],
-                                  receive_data['x'],
-                                  receive_data['y']))
+            enemy['obj'].struck()
+            
+    bullet_id = receive_data['bullet_id']
+    struckted_bullet_list.append((bullet_id,
+                                receive_data['x'],
+                                receive_data['y']))
+    #自分が発射した弾が命中した時
+    if bullet_id in fired_bullet_list:
+        hit()
+        fired_bullet_list.remove(bullet_id)
+        
+#命中時
+def hit():
+    global score
+    score += bullet_damage
 
 #初期位置の候補をランダムに
 def init_place(field_x, field_y, wall_width):
@@ -669,6 +720,54 @@ def init_place(field_x, field_y, wall_width):
 #正確な現在時刻
 def nowtime():
     return time.time() + time_offset
+
+class TankSelect(object):
+    def __init__(self, x, y, image, speed, hp, attack, accel):
+        self.image = pygame.image.load(image).convert_alpha()
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.y = y
+        #説明テキスト用
+        color = (255, 255, 255)
+        font = pygame.font.Font('ipagp.ttf', 20)
+        self.label_init_x = self.rect.topright[0] + 10
+        self.label_init_y = self.rect.topright[1]
+        self.hp_label = font.render(u'HP: {}'.format(hp), True, color)
+        self.speed_label = font.render(u'最高速度: {}'.format(speed), True, color)
+        self.attack_label = font.render(u'攻撃力: {}'.format(attack), True, color)
+        self.accel_label = font.render(u'加速力: {}'.format(accel), True, color)
+        
+        
+    def update(self):
+        screen.blit(self.image, self.rect)
+        #tank情報表示
+        screen.blit(self.hp_label, (self.label_init_x,self.label_init_y))
+        screen.blit(self.speed_label, (self.label_init_x,self.label_init_y+25))
+        screen.blit(self.attack_label, (self.label_init_x,self.label_init_y+50))
+        screen.blit(self.accel_label, (self.label_init_x,self.label_init_y+75))
+
+
+def place_select_tank(tank_types, num_tank_row, tank_dataset):
+    #配置する間隔
+    x_step = screen_width /4
+    current_y = 300
+    select_tanks = list()
+    current_tank_id = 0
+    for i in range(tank_types/num_tank_row):
+        for n in range(num_tank_row):
+            current_x = (n+1)*x_step
+            image = tank_id_file[current_tank_id]
+            tank_data = tank_dataset[current_tank_id]
+            speed = int(tank_data['tank_speed'])
+            hp = tank_data['hp']
+            attack = tank_data['bullet_damage']
+            accel = tank_data['accel_ratio']
+            select_tanks.append(TankSelect(current_x, current_y, image, speed, hp, attack, accel))
+            current_tank_id += 1
+        current_y += 200
+        
+    return select_tanks
+        
 
 if __name__ == '__main__':
     #proxy対策
@@ -688,9 +787,12 @@ if __name__ == '__main__':
     screen_width = 1024
     screen_height = 768
     #tank_idに対応したファイル名
-    tank_id_file = ('./imgs/0_tank.png','./imgs/1_tank.png','./imgs/2_tank.png','./imgs/3_tank.png')
-    bullet_id_file = ('./imgs/0_bullet.png','./imgs/1_bullet.png',
-                      './imgs/2_bullet.png','./imgs/3_bullet.png')
+    tank_id_file = ('./imgs/0_tank.png','./imgs/1_tank.png','./imgs/2_tank.png','./imgs/3_tank.png',
+                    './imgs/4_tank.png','./imgs/5_tank.png')
+    diedtank_id_file = ('./imgs/0_tank_died.png','./imgs/1_tank_died.png','./imgs/2_tank_died.png','./imgs/3_tank_died.png',
+                    './imgs/4_tank_died.png','./imgs/5_tank_died.png')
+    bullet_id_file = ('./imgs/0_bullet.png','./imgs/1_bullet.png','./imgs/2_bullet.png','./imgs/3_bullet.png',
+                      './imgs/4_bullet.png','./imgs/5_bullet.png')
     
     #フィールドサイズ
     maze_x = 10
@@ -727,6 +829,9 @@ if __name__ == '__main__':
     radar_init_x = screen_width - 350
     radar_init_y = 30
     
+    #スコア表示位置
+    score_init_y = radar_init_y + radar_img.get_height() + 30
+    
     #HPバー
     hp_green_img = pygame.image.load('./imgs/hp_green.png').convert_alpha()
     hp_red_img = pygame.image.load('./imgs/hp_red.png').convert_alpha()
@@ -744,10 +849,6 @@ if __name__ == '__main__':
     #爆発アニメ
     explode_anim_imgs = [pygame.image.load('./imgs/explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
 
-    #TODO グラフィック番号変更可能に
-    #戦車のグラフィック番号
-    tank_id = 0
-    
     #送受信データキュー,送受信プロセス作成
     send_queue = Queue()
     receive_queue = Queue()
@@ -756,25 +857,29 @@ if __name__ == '__main__':
     send_process.start()
     receive_process.start()
     
-    #テキストボックス
-    #input_entered = None
-    #textbox_width = 300
-    #textbox_height = 75
-    #btn_width = 200
-    #btn_height = 100
-    #textboxes = [
-        #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
-        #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
-    #btn = Button(u'参戦',
-            #pygame.Rect(screen_width/2-btn_width/2,screen_width/2-200+textbox_height*3.5,
-                #btn_width, btn_height))
-    
     title_font = pygame.font.Font('ipagp.ttf',70)
     tankname_font = pygame.font.Font('ipagp.ttf', 20)
     mystatus_font = pygame.font.Font('ipagp.ttf', 30)
     myhp_descript =  mystatus_font.render('HP', True, (255,255,255))
     myshot_descript =  mystatus_font.render('Shot', True, (255,255,255))
     mybomb_descript =  mystatus_font.render('Bomb', True, (255,255,255))
+    score_font = pygame.font.Font('ipagp.ttf', 40)
+    
+    #テキストボックス
+    #input_entered = None
+    #textbox_width = 300
+    #textbox_height = 75
+    btn_width = 900
+    btn_height = 100
+    #textboxes = [
+        #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
+        #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
+    title_surface = title_font.render(u'GunTankOnline',True,(255,255,255))
+    guestbtn = Button(u'ゲストとして参戦', pygame.Rect(0,400,btn_width, btn_height))
+    guestbtn.rect.centerx = screen.get_rect().centerx
+    loginbtn = Button(u'ログインして参戦', pygame.Rect(0,550,btn_width, btn_height))
+    loginbtn.rect.centerx = screen.get_rect().centerx
+    
 
     quit = False
     state = 'init'
@@ -813,52 +918,55 @@ if __name__ == '__main__':
                 #敵が被弾した弾リスト初期化
                 struckted_bullet_list = list()
                 
-                #テキストボックス初期化
-                #if debug:
-                    #textboxes[0].str_list = list(str(user_id))
-                    #textboxes[1].str_list = list(str(password))
-                #else:
-                    #textboxes[0].str_list = list()
-                    #textboxes[1].str_list = list()
-                state = 'attend'
+                #自分が打った弾リスト
+                fired_bullet_list = list()
+                
+                state = 'title'
 
             #タイトル画面
-            #elif state == 'title':
-                #title_surface = title_font.render(u'GunTankOnline',True,(255,255,255))
-            
-                #for event in pygame.event.get():
-                    #if event.type == pygame.KEYDOWN:
-                        #for box in textboxes:
-                            #if box.selected:
-                                #input_entered = box.char_add(event)
-                    #elif event.type == pygame.MOUSEBUTTONDOWN:
-                        #if event.button == 1:
-                            #for box in textboxes:
-                                #if box.rect.collidepoint(pygame.mouse.get_pos()):
-                                    #box.selected = True
-                                #else:
-                                    #box.selected = False
-                                #if btn.rect.collidepoint(pygame.mouse.get_pos()):
-                                    #id_input = textboxes[0].string
-                                    #pass_input = textboxes[1].string
-                                    #if id_input and pass_input:
-                                        #user_id = id_input
-                                        #password = pass_input
-                                        #title_surface = title_font.render(u'待機中です…',True,(255,255,255))
-                                        #state = 'attend'
+            elif state == 'title':
+                for event in pygame.event.get():
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        #ゲスト参戦クリック
+                        if guestbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                            tank_dataset = json.loads(urllib2.urlopen('http://{}/tankdata'.format(server_addr)).read())
+                            select_tanks = place_select_tank(6, 3, tank_dataset)
+                            state = 'select'
+                        #ログイン参戦クリック
+                        elif loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                            pass
 
-                    #screen.fill((0,0,0))
-                    #screen.blit(title_surface,(
-                        #screen_width/2- title_surface.get_width()/2,
-                        #screen_height/2 - title_surface.get_height()*2 - 50 ))
-                    #for box in textboxes:
-                        #box.update(screen)
-                    #btn.update(screen)
+                    screen.fill((0,0,0))
+                    title_rect = title_surface.get_rect()
+                    title_rect.center = (screen_width/2, 50)
+                    screen.blit(title_surface, title_rect)
+                    guestbtn.update(screen)
+                    loginbtn.update(screen)
+
+            #機体選択
+            elif state == 'select':
+                for event in pygame.event.get():
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        #ゲスト参戦クリック
+                        for i,select_tank in enumerate(select_tanks):
+                            if select_tank.rect.collidepoint(pygame.mouse.get_pos()):
+                                mytank_id = i
+                                state = 'attend'
+
+                screen.fill((0,0,0))
+                color = (255,255,255)
+                screen.blit(title_surface, title_rect)
+                page_name = u'機体セレクト'
+                page_surface = title_font.render(page_name, True, color)
+                screen.blit(page_surface, title_rect.midbottom)
+                [select_tank.update() for select_tank in select_tanks]
+                
+
 
             #参戦選択後の処理
             elif state == 'attend':
                 #自機データ送信,セッションID取得
-                data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':tank_id}
+                data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
                 mysession_id = int(json.loads(urllib2.urlopen('http://{}/attend?json={}'.format(server_addr,
                                               urllib2.quote(json.dumps(data)))).read())['session_id'])
                 state = 'wait'
@@ -875,7 +983,7 @@ if __name__ == '__main__':
                     if start_time < nowtime():
                         state = 'start'
                 if not state=='start':
-                    time.sleep(0.5)
+                    time.sleep(1)
                     
             elif state == 'start':
                 data = json.loads(urllib2.urlopen('http://{}/start?battle_id={}'.format(server_addr, battle_id)).read())
@@ -895,15 +1003,15 @@ if __name__ == '__main__':
                     accel_ratio = float(tankdata['accel_ratio'])
                     brake_ratio = float(tankdata['brake_ratio'])
                     
+                    tank_id = player['tank_id']
+                    
                     if session_id == mysession_id:
-                        print('build mine')
                         #自機obj生成
                         mytank = Tank(screen_width/2,screen_height/2,'right',
                                     tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage, tank_id, True,
                                     accel_ratio, brake_ratio)
                     else:
                         #敵obj生成
-                        print('build enemy')
                         enemy_list.append({
                             'obj':Tank(0,0,'right',tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage,tank_id),
                             'ipaddr':player['ipaddr'],
@@ -926,6 +1034,8 @@ if __name__ == '__main__':
                 addresses = list()
                 for enemy in enemy_list:
                     addresses.append([enemy['ipaddr'],enemy['port']])
+                    
+                score = 0
 
                 #初期位置設定
                 while True:
@@ -1051,7 +1161,8 @@ if __name__ == '__main__':
                     else:
                         died_list.append(False)
 
-                if not False in died_list or mytank.hp <= 0:
+                #if not False in died_list or mytank.hp <= 0:
+                if mytank.hp <= 0:
                     print('died')
                     state = 'init'
                     
@@ -1059,6 +1170,10 @@ if __name__ == '__main__':
                 screen.blit(radar_img, (radar_init_x, radar_init_y)) #レーダー画面
                 radartanks.draw(screen)
                 radarwalls.draw(screen)
+                
+                #スコア表示
+                score_surface = score_font.render(u'Score {}'.format(score), True, (255,255,255), (0,0,0))
+                screen.blit(score_surface, (screen_width-score_surface.get_width()-20, score_init_y))
                 
                 #自機ステータス表示
                 screen.blit(mystatusback_img, (mystatus_x, mystatus_y))
