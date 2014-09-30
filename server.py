@@ -21,7 +21,7 @@ maze_y = 10
 
 stage_list = list()
 
-for i in range(1):
+for i in range(20):
     with open('stage/stage{}.txt'.format(i)) as f:
         stage_list.append(f.read())
 
@@ -87,7 +87,7 @@ def set_db(db):
 
 @app.route('/time')
 def give_time():
-    return str(time.time())
+    return json.dumps([str(time.time()), request.remote_addr])
 
 #参戦
 #query:json
@@ -125,9 +125,9 @@ def check():
         db['wait_for_start'] = True
         #1分後に開始時刻設定
         #TEST 10秒に
-        db['start_time'] = time.time() + 10
+        db['start_time'] = time.time() + 15
         
-    set_db(db)
+        set_db(db)
 
     return json.dumps({'start':db['wait_for_start'], 'waiting':waiting, 'start_time':db['start_time'], 'battle_id':db['battle_id']})
 
@@ -138,12 +138,33 @@ def start():
     battle_id = request.args['battle_id']
     #そのバトルが初回アクセス時
     if not battle_id in db['battlelist']:
-        print(stage_list)
         stage = random.choice(stage_list)
         db['battlelist'][battle_id] = [stage, db['waitlist']]
         set_db(db)
     
     return json.dumps(db['battlelist'][battle_id]+[tank_dataset])
+
+#スコアを報告
+#query: battle_id, session_id, score
+@app.route('/score')
+def score():
+    battle_id = request.args['battle_id']
+    session_id = int(request.args['session_id'])
+    score = int(request.args['score'])
+    db = get_db()
+    for i,session in  enumerate(db['battlelist'][battle_id][1]):
+        if session['session_id'] == session_id:
+            db['battlelist'][battle_id][1][i]['score'] = score
+    set_db(db)
+    return ''
+    
+#ランキング取得
+#query: battle_id
+@app.route('/ranking')
+def ranking():
+    db = get_db()
+    battle_id = request.args['battle_id']
+    return json.dumps(db['battlelist'][battle_id][1])
 
 #tank_dataset を返す
 @app.route('/tankdata')

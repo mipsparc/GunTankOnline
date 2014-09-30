@@ -19,7 +19,6 @@ from math import ceil #切り上げ
 class Tank(pygame.sprite.Sprite):
     def __init__(self, x, y, way, speed, bullet_speed, bullet_per_sec,
             hp, bullet_damage, tank_id, center=None, accel_ratio=None, brake_ratio=None):
-        #setting sprite group
         pygame.sprite.Sprite.__init__(self, self.containers)
 
         self.clock = pygame.time.Clock()
@@ -56,6 +55,9 @@ class Tank(pygame.sprite.Sprite):
         self.bullet_passed_sec = 0
 
         self.radar = RadarTank(self)
+        
+        #死亡
+        self.died = False
 
         if self.center:
             #背景を動かすときの相対的な座標
@@ -69,7 +71,7 @@ class Tank(pygame.sprite.Sprite):
             self.default_x = x
             self.default_y = y
 
-    def update(self, relative_x=None, relative_y=None):
+    def update(self, relative_x, relative_y, countdown):
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
         
@@ -79,87 +81,89 @@ class Tank(pygame.sprite.Sprite):
             #前フレームからのdiff
             x_diff = 0
             y_diff = 0
-
-            #移動
+            
             pygame.event.pump()
-            pressed_keys = pygame.key.get_pressed()
-            last_way = self.way
-            if pressed_keys[K_UP] or pressed_keys[K_w]:
-                self.way = 'up'
-                #反対に動いている場合
-                if self.y_speed > 0:
-                    self.y_speed -= 2 * accel_ratio * passed_seconds
-                else:
-                    self.y_speed -= accel_ratio * passed_seconds
-                #制限速度管理
-                if self.y_speed < -self.speed: self.y_speed = -self.speed
-                #何もないなら自動で減速
-                self.x_speed = int(self.x_speed * brake_ratio * 0.5)
+            #カウントダウン中動きをキャンセル
+            if not block:
+                #移動
+                pressed_keys = pygame.key.get_pressed()
+                last_way = self.way
+                if pressed_keys[K_UP] or pressed_keys[K_w]:
+                    self.way = 'up'
+                    #反対に動いている場合
+                    if self.y_speed > 0:
+                        self.y_speed -= 2 * accel_ratio * passed_seconds
+                    else:
+                        self.y_speed -= accel_ratio * passed_seconds
+                    #制限速度管理
+                    if self.y_speed < -self.speed: self.y_speed = -self.speed
+                    #何もないなら自動で減速
+                    self.x_speed = int(self.x_speed * brake_ratio * 0.5)
+                        
+                elif pressed_keys[K_DOWN] or pressed_keys[K_s]:
+                    self.way = 'down'
+                    if self.y_speed < 0:
+                        self.y_speed += 2 * accel_ratio * passed_seconds
+                    else:
+                        self.y_speed += accel_ratio * passed_seconds
+                    if self.y_speed > self.speed: self.y_speed = self.speed
+                    self.x_speed = int(self.x_speed * brake_ratio * 0.5)
                     
-            elif pressed_keys[K_DOWN] or pressed_keys[K_s]:
-                self.way = 'down'
-                if self.y_speed < 0:
-                    self.y_speed += 2 * accel_ratio * passed_seconds
+                elif pressed_keys[K_LEFT] or pressed_keys[K_a]:
+                    self.way = 'left'
+                    if self.x_speed > 0:
+                        self.x_speed -= 2 * accel_ratio * passed_seconds
+                    else:
+                        self.x_speed -= accel_ratio * passed_seconds
+                    if self.x_speed < -self.speed: self.x_speed = -self.speed
+                    self.y_speed = int(self.y_speed * brake_ratio * 0.5)                    
+                    
+                elif pressed_keys[K_RIGHT] or pressed_keys[K_d]:
+                    self.way = 'right'
+                    if self.x_speed < 0:
+                        self.x_speed += 2 * accel_ratio * passed_seconds
+                    else:
+                        self.x_speed += accel_ratio * passed_seconds
+                    if self.x_speed > self.speed: self.x_speed = self.speed
+                    self.y_speed = int(self.y_speed * brake_ratio * 0.5)
+                
+                #FOR DEBUG!! TEST
+                #強制終了
+                elif pressed_keys[K_q]:
+                    print('SUICIDED')
+                    self.struck(self.hp)
+                    
                 else:
-                    self.y_speed += accel_ratio * passed_seconds
-                if self.y_speed > self.speed: self.y_speed = self.speed
-                self.x_speed = int(self.x_speed * brake_ratio * 0.5)
-                
-            elif pressed_keys[K_LEFT] or pressed_keys[K_a]:
-                self.way = 'left'
-                if self.x_speed > 0:
-                    self.x_speed -= 2 * accel_ratio * passed_seconds
-                else:
-                    self.x_speed -= accel_ratio * passed_seconds
-                if self.x_speed < -self.speed: self.x_speed = -self.speed
-                self.y_speed = int(self.y_speed * brake_ratio * 0.5)                    
-                
-            elif pressed_keys[K_RIGHT] or pressed_keys[K_d]:
-                self.way = 'right'
-                if self.x_speed < 0:
-                    self.x_speed += 2 * accel_ratio * passed_seconds
-                else:
-                    self.x_speed += accel_ratio * passed_seconds
-                if self.x_speed > self.speed: self.x_speed = self.speed
-                self.y_speed = int(self.y_speed * brake_ratio * 0.5)
-                
-            #FOR DEBUG!! TEST
-            #強制終了
-            elif pressed_keys[K_q]:
-                print('SUICIDED')
-                self.struck(self.hp)
-                
-            else:
-                self.x_speed = int(self.x_speed * brake_ratio)
-                self.y_speed = int(self.y_speed * brake_ratio)
-                
-                #小さい時は0にしてしまう
-                if abs(self.x_speed) < 5:
-                    self.x_speed = 0
-                if abs(self.y_speed) < 5:
-                    self.y_speed = 0
+                    self.x_speed = int(self.x_speed * brake_ratio)
+                    self.y_speed = int(self.y_speed * brake_ratio)
+                    
+                    #小さい時は0にしてしまう
+                    if abs(self.x_speed) < 5:
+                        self.x_speed = 0
+                    if abs(self.y_speed) < 5:
+                        self.y_speed = 0
 
-            x_diff = self.x_speed * passed_seconds
-            y_diff = self.y_speed * passed_seconds
-        
-            #方向固定
-            if pressed_keys[K_z]:
-                self.way = last_way
-                if self.way == 'up' or self.way == 'down':
-                    x_diff = 0
-                elif self.way == 'left' or self.way == 'right':
-                    y_diff = 0
+                x_diff = self.x_speed * passed_seconds
+                y_diff = self.y_speed * passed_seconds
+            
+                #方向固定
+                if pressed_keys[K_z]:
+                    self.way = last_way
+                    if self.way == 'up' or self.way == 'down':
+                        x_diff = 0
+                    elif self.way == 'left' or self.way == 'right':
+                        y_diff = 0
 
-            #発射
-            self.bullet_passed_sec += passed_seconds
-            if pressed_keys[K_SPACE] and \
-                    self.bullet_passed_sec * self.bullet_per_sec >= 1:
-                if x_diff or y_diff:
-                    self.fire(self.speed + self.bullet_speed)
-                else:
-                    self.fire(self.bullet_speed)
-                self.bullet_passed_sec = 0
-
+                #発射
+                self.bullet_passed_sec += passed_seconds
+                if pressed_keys[K_SPACE] and \
+                        self.bullet_passed_sec * self.bullet_per_sec >= 1:
+                    if x_diff or y_diff:
+                        self.fire(self.speed + self.bullet_speed)
+                    else:
+                        self.fire(self.bullet_speed)
+                    self.bullet_passed_sec = 0
+            
             #画面左上の座標
             self.relative_x += x_diff
             self.relative_y += y_diff
@@ -189,6 +193,7 @@ class Tank(pygame.sprite.Sprite):
             #他ノードに発射データを送信
             send_queue.put({
                 'addresses':addresses,
+                'session_id':mysession_id,
                 'type':'fire',
                 'time':time.time(),
                 'x':self.x,
@@ -202,10 +207,13 @@ class Tank(pygame.sprite.Sprite):
             fired_bullet_list.append(bullet_id)
         else:
             Bullet(self, speed,bullet_id, self.bullet_damage, colid_point)
+           
+        
 
     def struck(self, bullet_damage=None):
         if self.center:
             self.hp -= bullet_damage
+        #死亡時のグラ入れ替え
         if self.hp <= 0:
             self.origin_image = pygame.image.load(diedtank_id_file[tank_id]).convert_alpha()
             if self.way == 'up':
@@ -332,7 +340,7 @@ class Bullet(pygame.sprite.Sprite):
             
         #衝突予定座標
         self.colid_point = colid_point
-
+        
     def update(self, relative_x, relative_y):
         global struckted_bullet_list
         global fired_bullet_list
@@ -362,18 +370,21 @@ class Bullet(pygame.sprite.Sprite):
                 pass
         
         #自機に衝突時
-        if not self.tank.center and pygame.sprite.collide_rect(self, mytank):
+        if not self.tank.center and pygame.sprite.collide_rect(self, mytank)\
+            and not self.bullet_id in fired_bullet_list:
             mytank.struck(self.bullet_damage)
             bullets.remove(self)
             all_sprites.remove(self)
             #x,yは弾が被弾したポイント
             send_queue.put({
                     'addresses':addresses,
+                    'session_id':mysession_id,
                     'type':'struck',
                     'bullet_id':self.bullet_id,
                     'hp':mytank.hp,
                     'x':self.default_x,
-                    'y':self.default_y
+                    'y':self.default_y,
+                    'died':self.tank.died
                     })
             Explode(self.default_x, self.default_y)
             
@@ -521,7 +532,7 @@ def make_field(maze, maze_x, maze_y):
             outer_char = False
             if s_num == 0 or s_num == len(line) - 1:
                 outer_char = True
-            if line_num == len(maze_lines)-2 or line_num == 0:
+            if line_num == len(maze_lines)-1 or line_num == 0:
                 outer_line = True
 
             #文字列パース
@@ -598,10 +609,15 @@ def make_ground(maze_x, maze_y):
 
 #爆発エフェクト
 class Explode(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, size='big'):
         pygame.sprite.Sprite.__init__(self, self.containers)
         
-        self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in explode_anim_imgs], loop=False)
+        if size == 'small':
+            anim_imgs = smallexplode_anim_imgs
+            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
+        else:
+            anim_imgs = explode_anim_imgs
+            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
         self.rect = explode_anim_imgs[0].get_rect()
         
         self.default_x = x
@@ -671,17 +687,17 @@ def receive(receive_queue, receive_port):
         pass
 
 #敵が動いた時に更新
-def enemy_move(receive_data, ipaddr):
+def enemy_move(receive_data):
     for enemy in enemy_list:
-        if enemy['ipaddr'] == ipaddr:
+        if enemy['session_id'] == receive_data['session_id']:
             enemy['obj'].default_x = receive_data['x']
             enemy['obj'].default_y = receive_data['y']
             enemy['obj'].way = receive_data['way']
 
 #敵が発射した時に初期位置と方向,弾IDをリストに追加
-def enemy_fire(receive_data, ipaddr):
+def enemy_fire(receive_data):
     for enemy in enemy_list:
-        if enemy['ipaddr'] == ipaddr:
+        if enemy['session_id'] == receive_data['session_id']:
             enemy['obj'].default_x = receive_data['x']
             enemy['obj'].default_y = receive_data['y']
             enemy['obj'].way = receive_data['way']
@@ -689,9 +705,9 @@ def enemy_fire(receive_data, ipaddr):
                               receive_data['colid_point'])
 
 #敵が被弾したと申告してきた時にHPを合わせて,弾IDを削除リストに追加
-def enemy_struck(receive_data, ipaddr):
+def enemy_struck(receive_data):
     for enemy in enemy_list:
-        if enemy['ipaddr'] == ipaddr:
+        if enemy['session_id'] == receive_data['session_id']:
             enemy['obj'].hp = receive_data['hp']
             enemy['obj'].struck()
             
@@ -701,8 +717,10 @@ def enemy_struck(receive_data, ipaddr):
                                 receive_data['y']))
     #自分が発射した弾が命中した時
     if bullet_id in fired_bullet_list:
-        hit()
         fired_bullet_list.remove(bullet_id)
+        #当てた機体が死んでなかった時のみ得点
+        if not bool(receive_data['died']):
+            hit()
         
 #命中時
 def hit():
@@ -770,13 +788,9 @@ def place_select_tank(tank_types, num_tank_row, tank_dataset):
         
 
 if __name__ == '__main__':
-    #proxy対策
-    my_ipaddr = raw_input('MyIPaddr> ')
-
     #debug
-    if my_ipaddr=='localhost':
+    if raw_input('localhost?(y)> ')=='y':
         debug = True
-        my_ipaddr = '127.0.0.1'
         server_addr = '127.0.0.1:5000'
         receive_port = int(raw_input('RECV PORT> '))
     else:
@@ -803,8 +817,9 @@ if __name__ == '__main__':
     pygame.display.set_caption('GTO -Gun Tank Online-')
     clock = pygame.time.Clock()
     
-    #時刻の差を取得
-    time_offset = float(urllib2.urlopen('http://{}/time'.format(server_addr)).read()) - time.time()
+    #時刻の差と自IPアドレスを取得
+    server_time, my_ipaddr = json.loads(urllib2.urlopen('http://{}/time'.format(server_addr)).read())
+    time_offset = float(server_time) - time.time()
 
     #各パーツの寸法をチェック
     check_img = pygame.image.load('./imgs/wall.png')
@@ -848,6 +863,7 @@ if __name__ == '__main__':
     
     #爆発アニメ
     explode_anim_imgs = [pygame.image.load('./imgs/explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
+    smallexplode_anim_imgs = [pygame.image.load('./imgs/small_explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
 
     #送受信データキュー,送受信プロセス作成
     send_queue = Queue()
@@ -864,23 +880,26 @@ if __name__ == '__main__':
     myshot_descript =  mystatus_font.render('Shot', True, (255,255,255))
     mybomb_descript =  mystatus_font.render('Bomb', True, (255,255,255))
     score_font = pygame.font.Font('ipagp.ttf', 40)
+    waitmessage_font = pygame.font.Font('ipagp.ttf',40)
+    waitsecs_font = pygame.font.Font('ipagp.ttf',200)
+    countdown_font = pygame.font.Font('ipagp.ttf',500)
+    start_font = pygame.font.Font('ipagp.ttf',300)
+    ranking_font = pygame.font.Font('ipagp.ttf',20)
+    
     
     #テキストボックス
-    #input_entered = None
-    #textbox_width = 300
-    #textbox_height = 75
+    input_entered = None
+    textbox_width = 300
+    textbox_height = 75
     btn_width = 900
     btn_height = 100
-    #textboxes = [
-        #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
-        #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
+    
     title_surface = title_font.render(u'GunTankOnline',True,(255,255,255))
     guestbtn = Button(u'ゲストとして参戦', pygame.Rect(0,400,btn_width, btn_height))
     guestbtn.rect.centerx = screen.get_rect().centerx
     loginbtn = Button(u'ログインして参戦', pygame.Rect(0,550,btn_width, btn_height))
     loginbtn.rect.centerx = screen.get_rect().centerx
     
-
     quit = False
     state = 'init'
     #メインループ
@@ -921,6 +940,8 @@ if __name__ == '__main__':
                 #自分が打った弾リスト
                 fired_bullet_list = list()
                 
+                tank_dataset = json.loads(urllib2.urlopen('http://{}/tankdata'.format(server_addr)).read())
+                
                 state = 'title'
 
             #タイトル画面
@@ -929,12 +950,18 @@ if __name__ == '__main__':
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                         #ゲスト参戦クリック
                         if guestbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                            tank_dataset = json.loads(urllib2.urlopen('http://{}/tankdata'.format(server_addr)).read())
                             select_tanks = place_select_tank(6, 3, tank_dataset)
                             state = 'select'
                         #ログイン参戦クリック
                         elif loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                            pass
+                            textboxes = [
+                                TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
+                                TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
+                            btn = Button(u'ログイン',
+                                pygame.Rect(0,screen_width/2-200+textbox_height*3.5,
+                                btn_width, btn_height))
+                            btn.rect.centerx = screen.get_rect().centerx
+                            state = 'login'
 
                     screen.fill((0,0,0))
                     title_rect = title_surface.get_rect()
@@ -942,6 +969,38 @@ if __name__ == '__main__':
                     screen.blit(title_surface, title_rect)
                     guestbtn.update(screen)
                     loginbtn.update(screen)
+                    
+            elif state == 'login':
+                screen.fill((0,0,0))
+                color = (255,255,255)
+                screen.blit(title_surface, title_rect)
+                page_name = u'ログイン'
+                page_surface = title_font.render(page_name, True, color)
+                screen.blit(page_surface, title_rect.midbottom)
+                
+                for event in pygame.event.get():
+                    if event.type == pygame.KEYDOWN:
+                        for box in textboxes:
+                            if box.selected:
+                                input_entered = box.char_add(event)
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        if event.button == 1:
+                            for box in textboxes:
+                                if box.rect.collidepoint(pygame.mouse.get_pos()):
+                                    box.selected = True
+                                else:
+                                    box.selected = False
+                                if btn.rect.collidepoint(pygame.mouse.get_pos()):
+                                    id_input = textboxes[0].string
+                                    pass_input = textboxes[1].string
+                                    if id_input and pass_input:
+                                        user_id = id_input
+                                        password = pass_input
+                                        select_tanks = place_select_tank(6, 3, tank_dataset)
+                                        state = 'select'
+                for box in textboxes:
+                    box.update(screen)
+                btn.update(screen)
 
             #機体選択
             elif state == 'select':
@@ -960,8 +1019,6 @@ if __name__ == '__main__':
                 page_surface = title_font.render(page_name, True, color)
                 screen.blit(page_surface, title_rect.midbottom)
                 [select_tank.update() for select_tank in select_tanks]
-                
-
 
             #参戦選択後の処理
             elif state == 'attend':
@@ -969,22 +1026,46 @@ if __name__ == '__main__':
                 data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
                 mysession_id = int(json.loads(urllib2.urlopen('http://{}/attend?json={}'.format(server_addr,
                                               urllib2.quote(json.dumps(data)))).read())['session_id'])
+                #ポーリングで何秒待ってるか
+                poll_secs = 0
                 state = 'wait'
                     
             elif state == 'wait':
-                #サーバから承認されて開始データが来るまで待機
-                data = json.loads(urllib2.urlopen('http://{}/check'.format(server_addr)).read())
-                if not data['start']:
-                    print('...')
+                screen.fill((0,0,0))
+                color = (255,255,255)
+                screen.blit(title_surface, title_rect)
+                page_name = u'マッチング中...'
+                page_surface = title_font.render(page_name, True, color)
+                screen.blit(page_surface, title_rect.midbottom)
+                #フリーズ防止
+                pygame.event.get()
+                    
+                
+                if poll_secs <= 0:
+                    #サーバから承認されて開始データが来るまで待機
+                    data = json.loads(urllib2.urlopen('http://{}/check'.format(server_addr)).read())
+                    poll_secs = 3  #デフォルトを3sに
                 else:
-                    print('{} people are waiting...'.format(data['waiting']))
+                    poll_secs -= passed_seconds
+                    
+                if not data['start']:
+                    waitmessage = u'対戦相手が見つかるまで、そのまま離れずにお待ちください'
+                    wait_secs = None
+                else:
+                    waitmessage = u'対戦相手が{}人見つかりました。開始までお待ちください'.format(data['waiting']-1)
                     start_time = data['start_time']
                     battle_id = data['battle_id']
-                    if start_time < nowtime():
-                        state = 'start'
-                if not state=='start':
-                    time.sleep(1)
+                    current_time = nowtime()
                     
+                    if start_time < current_time:
+                        state = 'start'
+                    wait_secs = start_time - current_time
+                    waitsecs_surface = waitsecs_font.render(str(int(wait_secs)), True, color)
+                    screen.blit(waitsecs_surface, (screen_width/2-waitsecs_surface.get_width()/2 ,screen_height /3 *2))
+                        
+                waitmessage_surface = waitmessage_font.render(waitmessage, True, color)
+                screen.blit(waitmessage_surface, (screen_width/2-waitmessage_surface.get_width()/2,screen_height/2))
+                
             elif state == 'start':
                 data = json.loads(urllib2.urlopen('http://{}/start?battle_id={}'.format(server_addr, battle_id)).read())
                 maze = data[0]
@@ -1015,7 +1096,8 @@ if __name__ == '__main__':
                         enemy_list.append({
                             'obj':Tank(0,0,'right',tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage,tank_id),
                             'ipaddr':player['ipaddr'],
-                            'port':player['port']})
+                            'port':player['port'],
+                            'session_id':player['session_id']})
 
                 #画像準備
                 wall_landscape = pygame.image.load('./imgs/wall.png').convert()
@@ -1029,13 +1111,21 @@ if __name__ == '__main__':
 
                 field_x, field_y = make_field(maze, maze_x, maze_y)
                 make_ground(maze_x, maze_y)
+                
+                #たまったキーイベントによる開始時の動作を防止
+                pygame.event.get()
 
                 #アドレスリスト作成
                 addresses = list()
                 for enemy in enemy_list:
-                    addresses.append([enemy['ipaddr'],enemy['port']])
+                    addresses.append([enemy['ipaddr'],int(enemy['port'])])
                     
                 score = 0
+                
+                #カウントダウン終了時刻
+                end_countdown = start_time + 5
+                block = True
+                countdown = True
 
                 #初期位置設定
                 while True:
@@ -1047,13 +1137,22 @@ if __name__ == '__main__':
                     #start_x,yを反映
                     mytank.relative_x = start_x
                     mytank.relative_y = start_y
-                    tanks.update(mytank.relative_x, mytank.relative_y)
+                    tanks.update(mytank.relative_x, mytank.relative_y, countdown)
                     walls.update(mytank.relative_x, mytank.relative_y)
                     adapters.update(mytank.relative_x, mytank.relative_y)
                     #接触していない場合はループから離脱
                     if not (pygame.sprite.spritecollideany(mytank, walls) \
                         or pygame.sprite.spritecollideany(mytank, adapters)):
                         break
+
+                #初期位置送信
+                send_queue.put({
+                        'addresses':addresses,
+                        'session_id':mysession_id,
+                        'type':'move',
+                        'x':mytank.x,
+                        'y':mytank.y,
+                        'way':mytank.way})    
                     
                 state = 'play'
 
@@ -1063,18 +1162,18 @@ if __name__ == '__main__':
                 while not receive_queue.empty():
                     receive_data, ipaddr =  receive_queue.get(block=False)
                     if receive_data['type']=='move':
-                        enemy_move(receive_data, ipaddr)
+                        enemy_move(receive_data)
                     elif receive_data['type']=='fire':
-                        enemy_fire(receive_data, ipaddr)
+                        enemy_fire(receive_data)
                     elif receive_data['type'] == 'struck':
-                        enemy_struck(receive_data, ipaddr)
+                        enemy_struck(receive_data)
 
                 #移動前の位置を格納
                 last_relative_x = mytank.relative_x
                 last_relative_y = mytank.relative_y
 
                 #各オブジェクトをupdate
-                tanks.update(mytank.relative_x, mytank.relative_y)
+                tanks.update(mytank.relative_x, mytank.relative_y, countdown)
                 walls.update(mytank.relative_x, mytank.relative_y)
                 adapters.update(mytank.relative_x, mytank.relative_y)
                 bullets.update(mytank.relative_x, mytank.relative_y)
@@ -1099,13 +1198,14 @@ if __name__ == '__main__':
                    
                     walls.update(mytank.relative_x, mytank.relative_y)
                     adapters.update(mytank.relative_x, mytank.relative_y)
-                    tanks.update(mytank.relative_x, mytank.relative_y)
+                    tanks.update(mytank.relative_x, mytank.relative_y, countdown)
 
                 #機体が動いた場合に送信
                 if last_relative_x != mytank.relative_x or \
                         last_relative_y != mytank.relative_y:
                             send_queue.put({
                                 'addresses':addresses,
+                                'session_id':mysession_id,
                                 'type':'move',
                                 'x':mytank.x,
                                 'y':mytank.y,
@@ -1134,6 +1234,12 @@ if __name__ == '__main__':
                     
                     enemy = enemy_data['obj']
                     
+                    if enemy.hp <= 0:
+                        enemy.died = True
+                        died_list.append(True)
+                    else:
+                        died_list.append(False)
+                    
                     #HP/ネーム背景
                     status_x = enemy.rect.x - 30
                     status_y = enemy.rect.y - 55
@@ -1152,20 +1258,20 @@ if __name__ == '__main__':
                         hpbar_img = hp_green_img
                     else:
                         hpbar_img = hp_red_img
-                    hpbar_length = int((hp_percent/100) * hp_green_img.get_width())
+                    #マイナス考慮
+                    if not enemy.died:
+                        hpbar_length = int((hp_percent/100) * hp_green_img.get_width())
+                    else:
+                        hpbar_length = 0
                     screen.blit(hpbar_img, (status_x + 10, status_y + 30),
                                 area=pygame.Rect(0, 0, hpbar_length, hp_green_img.get_height()))
                     
-                    if enemy.hp <= 0:
-                        died_list.append(True)
-                    else:
-                        died_list.append(False)
-
-                #if not False in died_list or mytank.hp <= 0:
                 if mytank.hp <= 0:
-                    print('died')
-                    state = 'init'
-                    
+                    mytank.died = True
+                    died_list.append(True)
+                else:
+                    died_list.append(False)
+
                 #レーダー描画
                 screen.blit(radar_img, (radar_init_x, radar_init_y)) #レーダー画面
                 radartanks.draw(screen)
@@ -1185,7 +1291,11 @@ if __name__ == '__main__':
                     myhpbar_img = myhp_green_img
                 else:
                     myhpbar_img = myhp_red_img
-                myhpbar_length = int((myhp_percent/100) * myhp_green_img.get_width())
+
+                if not mytank.died:
+                    myhpbar_length = int((myhp_percent/100) * myhp_green_img.get_width())
+                else:
+                    myhpbar_length = 0      #マイナスを考慮
                 screen.blit(myhpbar_img, (mystatus_x + 105, mystatus_y + 5),
                             area=pygame.Rect(0, 0, myhpbar_length, myhp_green_img.get_height()))
                             
@@ -1195,6 +1305,88 @@ if __name__ == '__main__':
                 #ボム数
                 screen.blit(mybomb_descript, (mystatus_x + 5, mystatus_y + 75))
                 
+                #開始カウントダウン
+                if countdown:
+                    count_sec =  str(int(end_countdown - nowtime()))
+                    if count_sec <= '0':
+                        count_sec = 'START'
+                        #接続失敗ノードの切り離し
+                        for enemy_data in enemy_list:
+                            enemy = enemy_data['obj']
+                            if enemy.default_x==0 and enemy.default_y==0:
+                                radartanks.remove(enemy.radar)
+                                all_sprites.remove(enemy.radar)
+                                tanks.remove(enemy)
+                                all_sprites.remove(enemy)
+                                enemy_list.remove(enemy_data)
+                        block = False
+                        countdown = False
+                    s = pygame.Surface((screen_width, screen_height), SRCALPHA)
+                    s.fill((255,255,255,128))
+                    screen.blit(s, (0,0))
+                    if count_sec == 'START':
+                        count_sec_surface = start_font.render(count_sec, True, (255,255,255))
+                    else:
+                        count_sec_surface = countdown_font.render(count_sec, True, (255,255,255))
+                    screen.blit(count_sec_surface, (screen_width/2-count_sec_surface.get_width()/2,
+                                                    screen_height/2-count_sec_surface.get_height()/2))
+                    
+                #自機を含めて誰か一人だけになった場合は終了
+                if died_list.count(False)<=1:
+                    #動作のブロックとしてcountdownを流用
+                    if not block:
+                        block = True
+                        s = pygame.Surface((screen_width, screen_height), SRCALPHA)
+                        s.fill((0,0,0,128))
+                        finish_surface = start_font.render('FINISH', True, (255,255,255))
+                        screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
+                                    screen_height/2-count_sec_surface.get_height()/2))
+                        end_display_finish = time.time() + 5
+                        screen.blit(s, (0,0))
+                        screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
+                                    screen_height/2-count_sec_surface.get_height()/2))
+                        #スコアアップロード
+                        urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}'.format(
+                            server_addr, battle_id, mysession_id, score))
+                        
+                    else:
+                        screen.blit(s, (0,0))
+                        screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
+                                    screen_height/2-count_sec_surface.get_height()/2))
+                        if time.time() > end_display_finish:
+                            print('Finished')
+                            data = json.loads(urllib2.urlopen('http://{}/ranking?battle_id={}'.format(
+                                                server_addr, battle_id)).read())
+                            sorted_session = sorted(data, key=lambda session: session['score'], reverse=True)
+                            exitbtn = Button(u'終了', pygame.Rect(0,550,btn_width, btn_height))
+                            exitbtn.rect.centerx = screen.get_rect().centerx
+                            state = 'result'
+                    
+                    
+            elif state=='result':
+                screen.fill((0,0,0))
+                color = (255,255,255)
+                screen.blit(title_surface, title_rect)
+                page_name = u'リザルト'
+                page_surface = title_font.render(page_name, True, color)
+                screen.blit(page_surface, title_rect.midbottom)
+                
+                current_x = 50
+                current_y = 200
+                for i,session in enumerate(sorted_session):
+                    rank_text = u'第{}位:  {}  {}points'.format(i+1,session['session_id'],session['score'])
+                    rank_surface = ranking_font.render(rank_text, True, color)
+                    screen.blit(rank_surface, (current_x, current_y))
+                    current_y += 30
+                    
+                for event in pygame.event.get():
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        #クリック
+                        if exitbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                            state = 'init'
+                
+                exitbtn.update(screen)
+                    
             pygame.display.update()
             clock.tick(30)
             
