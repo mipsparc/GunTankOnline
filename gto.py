@@ -53,6 +53,8 @@ class Tank(pygame.sprite.Sprite):
         self.image = self.origin_image
 
         self.bullet_passed_sec = 0
+        self.bomb_passed_sec = 0
+        self.bomb_per_sec = 0.5
 
         self.radar = RadarTank(self)
         
@@ -132,6 +134,16 @@ class Tank(pygame.sprite.Sprite):
                 elif pressed_keys[K_q]:
                     print('SUICIDED')
                     self.struck(self.hp)
+                    send_queue.put({
+                    'addresses':addresses,
+                    'session_id':mysession_id,
+                    'type':'struck',
+                    'bullet_id':0,
+                    'hp':self.hp,
+                    'x':self.x,
+                    'y':self.y,
+                    'died':self.died
+                    })
                     
                 else:
                     self.x_speed = int(self.x_speed * brake_ratio)
@@ -155,7 +167,7 @@ class Tank(pygame.sprite.Sprite):
                         y_diff = 0
 
                 #発射
-                self.bullet_passed_sec += passed_seconds
+                self.bullet_passed_sec += passed_seconds #発射間隔を満たしている場合
                 if pressed_keys[K_SPACE] and \
                         self.bullet_passed_sec * self.bullet_per_sec >= 1:
                     if x_diff or y_diff:
@@ -163,6 +175,13 @@ class Tank(pygame.sprite.Sprite):
                     else:
                         self.fire(self.bullet_speed)
                     self.bullet_passed_sec = 0
+                
+                #ボム
+                self.bomb_passed_sec += passed_seconds
+                if pressed_keys[K_x] and \
+                        self.bomb_passed_sec * self.bomb_per_sec >= 1:
+                    self.bombed()
+                    self.bomb_passed_sec = 0
             
             #画面左上の座標
             self.relative_x += x_diff
@@ -195,7 +214,6 @@ class Tank(pygame.sprite.Sprite):
                 'addresses':addresses,
                 'session_id':mysession_id,
                 'type':'fire',
-                'time':time.time(),
                 'x':self.x,
                 'y':self.y,
                 'way':self.way,
@@ -215,6 +233,7 @@ class Tank(pygame.sprite.Sprite):
             self.hp -= bullet_damage
         #死亡時のグラ入れ替え
         if self.hp <= 0:
+            self.died = True
             self.origin_image = pygame.image.load(diedtank_id_file[tank_id]).convert_alpha()
             if self.way == 'up':
                 self.up_image = pygame.transform.rotate(self.origin_image, 270)
@@ -227,7 +246,23 @@ class Tank(pygame.sprite.Sprite):
             elif self.way == 'right':
                 self.right_image = pygame.transform.rotate(self.origin_image, 180)
                 self.image = self.right_image
+                
+    def bombed(self, explode_time=None):
+        if self.center:
+            explode_time = nowtime() + 3
             
+            send_queue.put({
+                'addresses':addresses,
+                'session_id':mysession_id,
+                'type':'bomb',
+                'x':self.x,
+                'y':self.y,
+                'explode':explode_time
+                })
+            
+            Bomb(self, self.x, self.y, explode_time)
+        else:
+            Bomb(self, self.default_x, self.default_y, explode_time)
 
 
 class Bullet(pygame.sprite.Sprite):
@@ -278,6 +313,7 @@ class Bullet(pygame.sprite.Sprite):
             self.image = self.origin_image
 
         self.rect = self.image.get_rect()
+        Explode(self.default_x, self.default_y, 'small')
         #中心に補正
         self.rect.center = (self.default_x, self.default_y)
         self.default_x = self.rect.x
@@ -285,6 +321,12 @@ class Bullet(pygame.sprite.Sprite):
         
         self.way = tank.way
         self.speed = speed
+        
+        #弾の当たり判定部分を拡大して,弾が透けるのを軽減
+        if self.way == 'up' or self.way == 'down':
+            self.rect.inflate_ip(0,50)
+        else:
+            self.rect.inflate_ip(50,0)
         
         if tank.center:
             self.rect.x = self.default_x - tank.relative_x
@@ -311,7 +353,6 @@ class Bullet(pygame.sprite.Sprite):
             detect_sprite.rect = detect_rect
             #衝突予定rect
             strike_sprites = pygame.sprite.spritecollide(detect_sprite, walls, False)
-            strike_sprites += pygame.sprite.spritecollide(detect_sprite, adapters, False)
             #衝突する可能性のあるxまたはy座標のリスト
             colid_points = list()
             for strike_sprite in strike_sprites:
@@ -398,6 +439,60 @@ class Bullet(pygame.sprite.Sprite):
 
         self.rect.x = self.default_x - relative_x
         self.rect.y = self.default_y - relative_y
+        
+        
+class Bomb(pygame.sprite.Sprite):
+    def __init__(self, tank, x, y, explode_time):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+        
+        self.tank = tank
+        self.explode_time = explode_time
+        self.default_x = x
+        self.default_y = y
+        
+        self.bomb_anim = pyganim.PygAnimation([(img, 0.3) for img in bombanim_imgs], loop=True)
+        self.crater_img = pygame.image.load('imgs/crater.png').convert_alpha()
+        self.craterrect = self.crater_img.get_rect()
+        self.rect = bombanim_imgs[0].get_rect()
+        self.bomb_anim.play()
+        self.state = 'wait'
+        
+    def update(self, relative_x, relative_y):
+        exploding = nowtime() > self.explode_time
+        #クレーターの位置を調整
+        self.craterrect.center = (self.default_x - relative_x, self.default_y - relative_y)
+        
+        if not exploding:
+            self.bomb_anim.blit(screen, (self.default_x - relative_x - self.rect.width/2,
+                                        self.default_y - relative_y - self.rect.height/2))
+        #爆発開始時
+        elif exploding and self.state == 'wait':
+            Explode(self.default_x, self.default_y, 'bomb')
+            detect_sprite = pygame.sprite.Sprite()
+            detect_sprite.rect = self.craterrect
+            damage_walls = pygame.sprite.spritecollide(detect_sprite, walls, False)
+            #自機に当たったかどうか
+            damaged = pygame.sprite.collide_rect(mytank, detect_sprite)
+            if damaged:
+                damage_hp = 100
+                mytank.struck(damage_hp)
+                send_queue.put({
+                    'addresses':addresses,
+                    'session_id':mysession_id,
+                    'type':'struck',
+                    'bullet_id':0,
+                    'hp':mytank.hp,
+                    'x':mytank.x,
+                    'y':mytank.y,
+                    'died':mytank.died
+                })
+                Explode(mytank.x, mytank.y)
+                
+            print(damage_walls)
+            self.state = 'exploded'
+            
+        elif self.state == 'exploded':
+            screen.blit(self.crater_img, self.craterrect)
 
 
 class Wall(pygame.sprite.Sprite):
@@ -424,6 +519,8 @@ class Wall(pygame.sprite.Sprite):
             self.image = wall_landscape
         elif self.way == 'portrait':
             self.image = wall_portrait
+        elif self.way == 'adapter':
+            self.image = adapter_image
 
 
 class OuterWall(Wall):
@@ -432,34 +529,8 @@ class OuterWall(Wall):
             self.image = outer_wall_landscape
         elif self.way == 'portrait':
             self.image = outer_wall_portrait
-
-
-class Adapter(pygame.sprite.Sprite):
-    def __init__(self, x, y):
-        pygame.sprite.Sprite.__init__(self, self.containers)
-
-        self.set_img()
-
-        self.way = 'landscape'
-        self.width = self.image.get_width()
-        self.height = self.image.get_height()
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-        self.default_x = x
-        self.default_y = y
-
-    def update(self, relative_x, relative_y):
-        self.rect.x = self.default_x - relative_x
-        self.rect.y = self.default_y - relative_y
-        
-    def set_img(self):
-        self.image = adapter_image
-
-
-class OuterAdapter(Adapter):
-    def set_img(self):
-        self.image = outer_adapter_image
+        elif self.way == 'adapter':
+            self.image = outer_adapter_image
         
         
 class RadarWall(pygame.sprite.Sprite):
@@ -484,6 +555,7 @@ class RadarWall(pygame.sprite.Sprite):
         self.wall_landscape = pygame.image.load('./imgs/radarwall.png').convert_alpha()
         self.wall_portrait = pygame.transform.rotate(self.wall_landscape, 90)
         self.adapter_image = pygame.image.load('./imgs/radaradapter.png').convert_alpha()
+        
         
 class RadarTank(pygame.sprite.Sprite):
     def __init__(self, tank):
@@ -512,6 +584,66 @@ class RadarTank(pygame.sprite.Sprite):
             self.image = pygame.image.load('./imgs/radarmytank.png').convert_alpha()
         else:
             self.image = pygame.image.load('./imgs/radartank.png').convert_alpha()
+            
+            
+#爆発エフェクト
+class Explode(pygame.sprite.Sprite):
+    def __init__(self, x, y, size='big'):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+        
+        if size == 'small':
+            anim_imgs = smallexplode_anim_imgs
+            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
+        elif size=='big':
+            anim_imgs = explode_anim_imgs
+            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
+        elif size == 'bomb':
+            anim_imgs = bombexplodeanim_imgs
+            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
+            
+        self.image = anim_imgs[0]
+        self.rect = anim_imgs[0].get_rect()
+        
+        self.default_x = x
+        self.default_y = y
+        
+        self.explode_anim.play()
+        
+    def update(self, relative_x, relative_y):
+        self.explode_anim.blit(screen, (self.default_x - relative_x - self.rect.width/2,
+                                        self.default_y - relative_y - self.rect.height/2))
+        if self.explode_anim.isFinished():
+            bombs.remove(self)
+            
+            
+#床
+class Ground(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+        self.set_img()
+
+        self.width = self.image.get_width()
+        self.height = self.image.get_height()
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.default_x = x
+        self.default_y = y
+
+    def update(self, relative_x, relative_y):
+        self.rect.x = self.default_x - relative_x
+        self.rect.y = self.default_y - relative_y
+
+    def set_img(self):
+        self.image = ground_image
+        
+        
+class OuterGround(Ground):
+    def update(self):
+        pass
+    
+    def set_img(self):
+        self.image = outer_ground_image
 
 
 #壁,アダプタ(レーダーのも)作成
@@ -554,9 +686,9 @@ def make_field(maze, maze_x, maze_y):
             elif s == '.':
                 RadarWall(radar_current_x, radar_current_y + radarwall_width, 'adapter')
                 if not(outer_char or outer_line):
-                    Adapter(current_x, current_y + wall_width)
+                    Wall(current_x, current_y + wall_width, 'adapter')
                 else:
-                    OuterAdapter(current_x, current_y + wall_width)
+                    OuterWall(current_x, current_y + wall_width, 'adapter')
                 radar_current_x += radarwall_height
                 current_x += wall_height
             elif s == '|':
@@ -564,11 +696,11 @@ def make_field(maze, maze_x, maze_y):
                 RadarWall(radar_current_x, radar_current_y + radarwall_width, 'adapter')
                 if not outer_char:
                     Wall(current_x, current_y, 'portrait')
-                    Adapter(current_x, current_y + wall_width)
+                    Wall(current_x, current_y + wall_width, 'adapter')
                     current_x += wall_height
                 else:
                     OuterWall(current_x, current_y, 'portrait')
-                    OuterAdapter(current_x, current_y + wall_width)
+                    OuterWall(current_x, current_y + wall_width, 'adapter')
                     current_x += wall_height
                 radar_current_x += radarwall_height
                 
@@ -580,7 +712,6 @@ def make_field(maze, maze_x, maze_y):
         radar_current_y += radarwall_width
         current_y += wall_width
         
-    print('field:',field_x,field_y)
     return current_x, current_y - wall_width
 
 #地面を作成
@@ -607,58 +738,6 @@ def make_ground(maze_x, maze_y):
             current_x += ground_width
         current_y += ground_height
 
-#爆発エフェクト
-class Explode(pygame.sprite.Sprite):
-    def __init__(self, x, y, size='big'):
-        pygame.sprite.Sprite.__init__(self, self.containers)
-        
-        if size == 'small':
-            anim_imgs = smallexplode_anim_imgs
-            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
-        else:
-            anim_imgs = explode_anim_imgs
-            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
-        self.rect = explode_anim_imgs[0].get_rect()
-        
-        self.default_x = x
-        self.default_y = y
-        
-        self.explode_anim.play()
-        
-    def update(self, relative_x, relative_y):
-        self.explode_anim.blit(screen, (self.default_x - relative_x - self.rect.width/2,
-                                        self.default_y - relative_y - self.rect.height/2))
-        if self.explode_anim.isFinished():
-            animes.remove(self)
-            
-#床
-class Ground(pygame.sprite.Sprite):
-    def __init__(self, x, y):
-        pygame.sprite.Sprite.__init__(self, self.containers)
-        self.set_img()
-
-        self.width = self.image.get_width()
-        self.height = self.image.get_height()
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-        self.default_x = x
-        self.default_y = y
-
-    def update(self, relative_x, relative_y):
-        self.rect.x = self.default_x - relative_x
-        self.rect.y = self.default_y - relative_y
-
-    def set_img(self):
-        self.image = ground_image
-        
-        
-class OuterGround(Ground):
-    def update(self):
-        pass
-    
-    def set_img(self):
-        self.image = outer_ground_image
 
 #
 #転送周り
@@ -721,6 +800,14 @@ def enemy_struck(receive_data):
         #当てた機体が死んでなかった時のみ得点
         if not bool(receive_data['died']):
             hit()
+            
+#敵が爆弾を置いた場合
+def enemy_bomb(receive_data):
+    for enemy in enemy_list:
+        if enemy['session_id'] == receive_data['session_id']:
+            enemy['obj'].default_x = receive_data['x']
+            enemy['obj'].default_y = receive_data['y']
+            enemy['obj'].bombed(receive_data['explode'])
         
 #命中時
 def hit():
@@ -729,7 +816,6 @@ def hit():
 
 #初期位置の候補をランダムに
 def init_place(field_x, field_y, wall_width):
-    print("field:{},{}".format(field_x, field_y))
     start_x = random.randint(wall_width, field_x - wall_width)
     start_y = random.randint(wall_width, field_y - wall_width)
     
@@ -847,6 +933,8 @@ if __name__ == '__main__':
     #スコア表示位置
     score_init_y = radar_init_y + radar_img.get_height() + 30
     
+    resttime_init_y = score_init_y + 50
+    
     #HPバー
     hp_green_img = pygame.image.load('./imgs/hp_green.png').convert_alpha()
     hp_red_img = pygame.image.load('./imgs/hp_red.png').convert_alpha()
@@ -864,6 +952,8 @@ if __name__ == '__main__':
     #爆発アニメ
     explode_anim_imgs = [pygame.image.load('./imgs/explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
     smallexplode_anim_imgs = [pygame.image.load('./imgs/small_explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
+    bombanim_imgs = [pygame.image.load('./imgs/bomb/{}.gif'.format(n)).convert_alpha() for n in range(2)]
+    bombexplodeanim_imgs = [pygame.image.load('./imgs/bomb_explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
 
     #送受信データキュー,送受信プロセス作成
     send_queue = Queue()
@@ -918,21 +1008,20 @@ if __name__ == '__main__':
                 walls = pygame.sprite.RenderUpdates()
                 Wall.containers = all_sprites, walls
                 OuterWall.containers = all_sprites, walls
-                adapters = pygame.sprite.RenderUpdates()
-                Adapter.containers = all_sprites, adapters
-                OuterAdapter.containers = all_sprites, adapters
                 bullets = pygame.sprite.RenderUpdates()
                 Bullet.containers = all_sprites, bullets
                 radarwalls = pygame.sprite.RenderUpdates()
                 RadarWall.containers = all_sprites, radarwalls
                 radartanks = pygame.sprite.RenderUpdates()
                 RadarTank.containers = all_sprites, radartanks
-                animes = pygame.sprite.RenderUpdates()
-                Explode.containers = animes
+                explodes = pygame.sprite.RenderUpdates()
+                Explode.containers = all_sprites, explodes
                 grounds = pygame.sprite.RenderUpdates()
-                Ground.containers = grounds
+                Ground.containers = all_sprites, grounds
                 outergrounds = pygame.sprite.RenderUpdates()
-                OuterGround.containers = outergrounds
+                OuterGround.containers = all_sprites, outergrounds
+                bombs = pygame.sprite.RenderUpdates()
+                Bomb.containers = all_sprites, bombs
                 
                 #敵が被弾した弾リスト初期化
                 struckted_bullet_list = list()
@@ -1055,6 +1144,7 @@ if __name__ == '__main__':
                     waitmessage = u'対戦相手が{}人見つかりました。開始までお待ちください'.format(data['waiting']-1)
                     start_time = data['start_time']
                     battle_id = data['battle_id']
+                    battle_duration = data['duration']
                     current_time = nowtime()
                     
                     if start_time < current_time:
@@ -1133,16 +1223,13 @@ if __name__ == '__main__':
                     start_x, start_y = init_place(field_y, field_y, wall_width)
                     start_x -= screen_width/2
                     start_y -= screen_height/2
-                    print("try:{},{}".format(start_x,start_y))
                     #start_x,yを反映
                     mytank.relative_x = start_x
                     mytank.relative_y = start_y
                     tanks.update(mytank.relative_x, mytank.relative_y, countdown)
                     walls.update(mytank.relative_x, mytank.relative_y)
-                    adapters.update(mytank.relative_x, mytank.relative_y)
                     #接触していない場合はループから離脱
-                    if not (pygame.sprite.spritecollideany(mytank, walls) \
-                        or pygame.sprite.spritecollideany(mytank, adapters)):
+                    if not pygame.sprite.spritecollideany(mytank, walls):
                         break
 
                 #初期位置送信
@@ -1154,6 +1241,7 @@ if __name__ == '__main__':
                         'y':mytank.y,
                         'way':mytank.way})    
                     
+                print('Start')
                 state = 'play'
 
             #ゲーム中
@@ -1167,6 +1255,8 @@ if __name__ == '__main__':
                         enemy_fire(receive_data)
                     elif receive_data['type'] == 'struck':
                         enemy_struck(receive_data)
+                    elif receive_data['type'] == 'bomb':
+                        enemy_bomb(receive_data)
 
                 #移動前の位置を格納
                 last_relative_x = mytank.relative_x
@@ -1175,16 +1265,12 @@ if __name__ == '__main__':
                 #各オブジェクトをupdate
                 tanks.update(mytank.relative_x, mytank.relative_y, countdown)
                 walls.update(mytank.relative_x, mytank.relative_y)
-                adapters.update(mytank.relative_x, mytank.relative_y)
                 bullets.update(mytank.relative_x, mytank.relative_y)
                 grounds.update(mytank.relative_x, mytank.relative_y)
                 outergrounds.update()
                 
                 #固定obj(壁,アダプタ),他の機体と機体との当たり判定
-                if pygame.sprite.spritecollideany(mytank, walls) \
-                        or pygame.sprite.spritecollideany(mytank, adapters):
-                        #or len(pygame.sprite.spritecollide(mytank, tanks, False))>1:
-                    #最後のは他の機体
+                if pygame.sprite.spritecollideany(mytank, walls):
                     #プラス方向に移動した場合
                     if last_relative_x < mytank.relative_x:
                         mytank.relative_x -= 2*(mytank.relative_x - last_relative_x)
@@ -1197,9 +1283,15 @@ if __name__ == '__main__':
                         mytank.relative_y += 2*(last_relative_y - mytank.relative_y)
                    
                     walls.update(mytank.relative_x, mytank.relative_y)
-                    adapters.update(mytank.relative_x, mytank.relative_y)
                     tanks.update(mytank.relative_x, mytank.relative_y, countdown)
-
+                    
+                #場外に出た時に強制的に戻す
+                if not pygame.sprite.spritecollideany(mytank, grounds):
+                    mytank.relative_x = start_x
+                    mytank.relative_y = start_y
+                    walls.update(mytank.relative_x, mytank.relative_y)
+                    tanks.update(mytank.relative_x, mytank.relative_y, countdown)
+                    
                 #機体が動いた場合に送信
                 if last_relative_x != mytank.relative_x or \
                         last_relative_y != mytank.relative_y:
@@ -1219,12 +1311,13 @@ if __name__ == '__main__':
                 outergrounds.draw(screen)
                 grounds.draw(screen)
                 bullets.draw(screen)
+                #爆弾アニメを更新・表示
+                bombs.update(mytank.relative_x, mytank.relative_y)
                 tanks.draw(screen)
                 walls.draw(screen)
-                adapters.draw(screen)
                 
-                #アニメーションを更新
-                animes.update(mytank.relative_x, mytank.relative_y)
+                #爆発アニメーションを更新/表示
+                explodes.update(mytank.relative_x, mytank.relative_y)
                 
                 #自機死亡・全滅確認
                 died_list = list()
@@ -1235,7 +1328,6 @@ if __name__ == '__main__':
                     enemy = enemy_data['obj']
                     
                     if enemy.hp <= 0:
-                        enemy.died = True
                         died_list.append(True)
                     else:
                         died_list.append(False)
@@ -1267,7 +1359,6 @@ if __name__ == '__main__':
                                 area=pygame.Rect(0, 0, hpbar_length, hp_green_img.get_height()))
                     
                 if mytank.hp <= 0:
-                    mytank.died = True
                     died_list.append(True)
                 else:
                     died_list.append(False)
@@ -1280,6 +1371,14 @@ if __name__ == '__main__':
                 #スコア表示
                 score_surface = score_font.render(u'Score {}'.format(score), True, (255,255,255), (0,0,0))
                 screen.blit(score_surface, (screen_width-score_surface.get_width()-20, score_init_y))
+                
+                #制限時間表示
+                if not countdown:
+                    resttime = int(battle_starttime+battle_duration-nowtime())
+                    if resttime < 0:
+                        resttime = 0
+                    resttime_surface = score_font.render(u'残り {}秒'.format(resttime), True, (255,255,255), (0,0,0))
+                    screen.blit(resttime_surface, (screen_width-resttime_surface.get_width()-20, resttime_init_y))
                 
                 #自機ステータス表示
                 screen.blit(mystatusback_img, (mystatus_x, mystatus_y))
@@ -1308,8 +1407,9 @@ if __name__ == '__main__':
                 #開始カウントダウン
                 if countdown:
                     count_sec =  str(int(end_countdown - nowtime()))
-                    if count_sec <= '0':
+                    if count_sec == '0':
                         count_sec = 'START'
+                        battle_starttime = time.time()
                         #接続失敗ノードの切り離し
                         for enemy_data in enemy_list:
                             enemy = enemy_data['obj']
@@ -1331,8 +1431,8 @@ if __name__ == '__main__':
                     screen.blit(count_sec_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                                     screen_height/2-count_sec_surface.get_height()/2))
                     
-                #自機を含めて誰か一人だけになった場合は終了
-                if died_list.count(False)<=1:
+                #自機を含めて誰か一人だけになったか終了時刻の場合は終了
+                if not countdown and (died_list.count(False)<=1 or battle_starttime+battle_duration <= nowtime()):
                     #動作のブロックとしてcountdownを流用
                     if not block:
                         block = True
@@ -1374,7 +1474,10 @@ if __name__ == '__main__':
                 current_x = 50
                 current_y = 200
                 for i,session in enumerate(sorted_session):
-                    rank_text = u'第{}位:  {}  {}points'.format(i+1,session['session_id'],session['score'])
+                    if not session['score']==-1:
+                        rank_text = u'第{}位:  {}  {}points'.format(i+1,session['session_id'],session['score'])
+                    else:
+                        rank_text = u'第{}位:  {}  DISCONNECTED'.format(i+1,session['session_id'])
                     rank_surface = ranking_font.render(rank_text, True, color)
                     screen.blit(rank_surface, (current_x, current_y))
                     current_y += 30

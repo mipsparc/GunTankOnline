@@ -111,7 +111,7 @@ def attend():
         db['start_time'] = None
         db['waitlist'] = list()
     
-    db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id, 'session_id':session_id})
+    db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id, 'session_id':session_id, 'score':-1})
     set_db(db)
     
     return json.dumps({'session_id':session_id})
@@ -121,15 +121,16 @@ def attend():
 def check():
     db = get_db()
     waiting = len(db['waitlist'])
+    #試合時間設定
+    battle_duration = 180
     if not db['wait_for_start'] and waiting >= 2:
         db['wait_for_start'] = True
-        #1分後に開始時刻設定
-        #TEST 10秒に
-        db['start_time'] = time.time() + 15
+        #開始時刻設定
+        db['start_time'] = time.time() + 10
         
         set_db(db)
 
-    return json.dumps({'start':db['wait_for_start'], 'waiting':waiting, 'start_time':db['start_time'], 'battle_id':db['battle_id']})
+    return json.dumps({'start':db['wait_for_start'], 'waiting':waiting, 'start_time':db['start_time'], 'battle_id':db['battle_id'],'duration':battle_duration})
 
 #query:battle_id
 @app.route('/start')
