@@ -74,6 +74,7 @@ class Tank(pygame.sprite.Sprite):
             self.default_y = y
 
     def update(self, relative_x, relative_y, countdown):
+        self.died = self.hp <= 0
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
         
@@ -233,7 +234,6 @@ class Tank(pygame.sprite.Sprite):
             self.hp -= bullet_damage
         #死亡時のグラ入れ替え
         if self.hp <= 0:
-            self.died = True
             self.origin_image = pygame.image.load(diedtank_id_file[tank_id]).convert_alpha()
             if self.way == 'up':
                 self.up_image = pygame.transform.rotate(self.origin_image, 270)
@@ -632,6 +632,10 @@ class RadarTank(pygame.sprite.Sprite):
         self.rect.y = 0
         
     def update(self):
+        #死亡時グラ入れ替え
+        if self.tank.died:
+            self.image = self.diedimage
+        
         if self.tank.center:
             x = self.tank.x // 11
             y = self.tank.y // 11
@@ -646,8 +650,10 @@ class RadarTank(pygame.sprite.Sprite):
     def get_img(self):
         if self.tank.center:
             self.image = pygame.image.load('./imgs/radarmytank.png').convert_alpha()
+            self.diedimage = self.image
         else:
             self.image = pygame.image.load('./imgs/radartank.png').convert_alpha()
+            self.diedimage = pygame.image.load('./imgs/diedradartank.png').convert_alpha()
             
             
 #爆発エフェクト
@@ -1014,6 +1020,7 @@ if __name__ == '__main__':
     hp_green_img = pygame.image.load('./imgs/hp_green.png').convert_alpha()
     hp_red_img = pygame.image.load('./imgs/hp_red.png').convert_alpha()
     hpback_img = pygame.image.load('./imgs/hpback.png').convert_alpha()
+    hp_died_img = pygame.image.load('./imgs/hpdied.png').convert_alpha()
     #HP/名前の背景
     statusback_img = pygame.image.load('./imgs/statusback.png').convert_alpha()
     #自機ステータス
@@ -1330,6 +1337,7 @@ if __name__ == '__main__':
                 end_countdown = start_time + 5
                 block = True
                 countdown = True
+                finish_screen = False
 
                 #初期位置設定
                 while True:
@@ -1426,8 +1434,8 @@ if __name__ == '__main__':
                 screen.fill((187, 127, 90))
                 outergrounds.draw(screen)
                 grounds.draw(screen)
-                bullets.draw(screen)
                 craters.draw(screen)
+                bullets.draw(screen)
                 damagedwalls.draw(screen)
                 walls.draw(screen)
                 tanks.draw(screen)
@@ -1459,7 +1467,10 @@ if __name__ == '__main__':
                     screen.blit(tankname_surface, (status_x + 10, status_y + 5))
                     
                     #HPバー背景(削れたぶん)
-                    screen.blit(hpback_img, (status_x + 10, status_y + 30))
+                    if enemy.died:
+                        screen.blit(hp_died_img, (status_x + 10, status_y + 30))
+                    else:
+                        screen.blit(hpback_img, (status_x + 10, status_y + 30))
                     
                     #HPバー
                     hp_percent = (float(enemy.hp) / enemy.default_hp)*100
@@ -1472,10 +1483,12 @@ if __name__ == '__main__':
                         hpbar_length = int((hp_percent/100) * hp_green_img.get_width())
                     else:
                         hpbar_length = 0
+                        hpbar_img = hp_died_img
                     screen.blit(hpbar_img, (status_x + 10, status_y + 30),
                                 area=pygame.Rect(0, 0, hpbar_length, hp_green_img.get_height()))
                     
-                if mytank.hp <= 0:
+                if mytank.died:
+                    block = True
                     died_list.append(True)
                 else:
                     died_list.append(False)
@@ -1550,9 +1563,7 @@ if __name__ == '__main__':
                     
                 #自機を含めて誰か一人だけになったか終了時刻の場合は終了
                 if not countdown and (died_list.count(False)<=1 or battle_starttime+battle_duration <= nowtime()):
-                    #動作のブロックとしてcountdownを流用
-                    if not block:
-                        block = True
+                    if not finish_screen:
                         s = pygame.Surface((screen_width, screen_height), SRCALPHA)
                         s.fill((0,0,0,128))
                         finish_surface = start_font.render('FINISH', True, (255,255,255))
@@ -1565,6 +1576,7 @@ if __name__ == '__main__':
                         #スコアアップロード
                         urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}'.format(
                             server_addr, battle_id, mysession_id, score))
+                        finish_screen = True
                         
                     else:
                         screen.blit(s, (0,0))
