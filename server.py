@@ -13,7 +13,8 @@ import json
 import random
 from maze_generator import Maze
 
-db_name = 'userdb.dat'
+db_name = 'db.dat'
+userdb_name = 'userdb.dat'
 app = Flask(__name__)
 
 maze_x = 10
@@ -84,10 +85,45 @@ def get_db():
 def set_db(db):
     with open(db_name,'w') as f:
         pickle.dump(db,f)
+        
+def get_userdb():
+    with open(userdb_name,'r') as f:
+        db = pickle.load(f)
+    return db
+
+def set_userdb(db):
+    with open(userdb_name,'w') as f:
+        pickle.dump(db,f)
+        
+def auth(userid, password):
+    users = get_userdb()
+    for user in users:
+        if user['id'] == userid and user['pass'] == password:
+            return True
+    #auth fail
+    return False
+
+def get_userdata(userid):
+    users = get_userdb()
+    for user in users:
+        if user['id'] == userid:
+            return [user['name'],user['score']]
+    #fail
+    return False
 
 @app.route('/time')
 def give_time():
     return json.dumps([str(time.time()), request.remote_addr])
+
+#ユーザ認証して,データ返す
+@app.route('/user')
+def userdata():
+    user_id = request.args['id']
+    password = request.args['pass']
+    if not auth(user_id, password):
+        return json.dumps({'auth':False})
+    else:
+        return json.dumps({'auth':True,'userdat':get_userdata(user_id)})
 
 #参戦
 #query:json
@@ -99,19 +135,29 @@ def attend():
     ipaddr = data['ipaddr']
     port = data['port']
     tank_id = data['tank_id']
-    user_id = data.get('user_id')
-    password = data.get('password')
+    user_id = data.get('id')
+    password = data.get('pass')
+    if user_id and password:
+        if not auth(user_id, password):
+            #認証失敗時は0を返す
+            return json.dumps({'session_id':0})
+        name, score = get_userdata(user_id)
+
+    else:
+        name = None
 
     session_id = random.randint(1,99999999)
     
-    if db['wait_for_start'] and db['start_time'] <= time.time():
+    if db['start_time'] <= time.time():
         print('cleared waitlist')
         db['wait_for_start'] = False
         db['battle_id'] = random.randint(1,99999999)
-        db['start_time'] = None
+        db['start_time'] = 2147483647   #max unixtime
         db['waitlist'] = list()
     
-    db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id, 'session_id':session_id, 'score':-1})
+    #未アップロードのscoreは-1
+    db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id,
+                           'id':user_id,'name':name,'session_id':session_id, 'score':-1})
     set_db(db)
     
     return json.dumps({'session_id':session_id})
@@ -156,7 +202,17 @@ def score():
     for i,session in  enumerate(db['battlelist'][battle_id][1]):
         if session['session_id'] == session_id:
             db['battlelist'][battle_id][1][i]['score'] = score
+            userid = db['battlelist'][battle_id][1][i]['id']
     set_db(db)
+    
+    #スコアをユーザの時は記録
+    if userid:
+        users = get_userdb()
+        for i,user in enumerate(users):
+            if users[i]['id'] == userid:
+                users[i]['score'] += score
+        set_userdb(users)
+    
     return ''
     
 #ランキング取得

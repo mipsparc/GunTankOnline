@@ -247,22 +247,26 @@ class Tank(pygame.sprite.Sprite):
                 self.right_image = pygame.transform.rotate(self.origin_image, 180)
                 self.image = self.right_image
                 
-    def bombed(self, explode_time=None):
+    def bombed(self, explode_time=None, bullet_id=None):
         if self.center:
+            #爆発を3s後に設定
+            bullet_id = random.randint(1, 99999999)
             explode_time = nowtime() + 3
             
             send_queue.put({
                 'addresses':addresses,
                 'session_id':mysession_id,
                 'type':'bomb',
+                'bullet_id':bullet_id,
                 'x':self.x,
                 'y':self.y,
                 'explode':explode_time
                 })
             
-            Bomb(self, self.x, self.y, explode_time)
+            Bomb(self, self.x, self.y, explode_time, bullet_id)
+            bombed_list.append(bullet_id)
         else:
-            Bomb(self, self.default_x, self.default_y, explode_time)
+            Bomb(self, self.default_x, self.default_y, explode_time, bullet_id)
 
 
 class Bullet(pygame.sprite.Sprite):
@@ -442,35 +446,41 @@ class Bullet(pygame.sprite.Sprite):
         
         
 class Bomb(pygame.sprite.Sprite):
-    def __init__(self, tank, x, y, explode_time):
+    def __init__(self, tank, x, y, explode_time, bullet_id):
         pygame.sprite.Sprite.__init__(self, self.containers)
         
         self.tank = tank
         self.explode_time = explode_time
         self.default_x = x
         self.default_y = y
-        
+        self.bullet_id = bullet_id
         self.bomb_anim = pyganim.PygAnimation([(img, 0.3) for img in bombanim_imgs], loop=True)
-        self.crater_img = pygame.image.load('imgs/crater.png').convert_alpha()
-        self.craterrect = self.crater_img.get_rect()
         self.rect = bombanim_imgs[0].get_rect()
         self.bomb_anim.play()
         self.state = 'wait'
         
     def update(self, relative_x, relative_y):
         exploding = nowtime() > self.explode_time
-        #クレーターの位置を調整
-        self.craterrect.center = (self.default_x - relative_x, self.default_y - relative_y)
         
         if not exploding:
             self.bomb_anim.blit(screen, (self.default_x - relative_x - self.rect.width/2,
                                         self.default_y - relative_y - self.rect.height/2))
         #爆発開始時
         elif exploding and self.state == 'wait':
-            Explode(self.default_x, self.default_y, 'bomb')
+            self.explode = Explode(self.default_x, self.default_y, 'bomb')
             detect_sprite = pygame.sprite.Sprite()
-            detect_sprite.rect = self.craterrect
+            detect_sprite.rect = self.explode.explode_anim.getFrame(0).get_rect()
+            detect_sprite.rect.center = (self.default_x - relative_x, self.default_y - relative_y)
+            #壁破壊
             damage_walls = pygame.sprite.spritecollide(detect_sprite, walls, False)
+            for damage_wall in damage_walls:
+                #Outerでないとき
+                if damage_wall.__class__.__name__ == 'Wall':
+                    DamagedWall((damage_wall.default_x, damage_wall.default_y),
+                                damage_wall.way, damage_wall.radar)
+                    walls.remove(damage_wall)
+                    all_sprites.remove(damage_wall)
+            
             #自機に当たったかどうか
             damaged = pygame.sprite.collide_rect(mytank, detect_sprite)
             if damaged:
@@ -480,7 +490,7 @@ class Bomb(pygame.sprite.Sprite):
                     'addresses':addresses,
                     'session_id':mysession_id,
                     'type':'struck',
-                    'bullet_id':0,
+                    'bullet_id':self.bullet_id,
                     'hp':mytank.hp,
                     'x':mytank.x,
                     'y':mytank.y,
@@ -488,16 +498,33 @@ class Bomb(pygame.sprite.Sprite):
                 })
                 Explode(mytank.x, mytank.y)
                 
-            print(damage_walls)
             self.state = 'exploded'
             
-        elif self.state == 'exploded':
-            screen.blit(self.crater_img, self.craterrect)
+        elif self.explode.explode_anim.isFinished():
+            Crater(self.default_x, self.default_y)
+            bombs.remove(self)
+            all_sprites.remove(self)
+            
+            
+class Crater(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+        self.default_x = x
+        self.default_y = y
+        
+        self.image = pygame.image.load('imgs/crater.png').convert_alpha()
+        self.rect = self.image.get_rect()
+    
+    def update(self, relative_x, relative_y):
+        self.rect.center = (self.default_x-relative_x,self.default_y-relative_y)
 
 
 class Wall(pygame.sprite.Sprite):
-    def __init__(self, x, y, way):
+    def __init__(self, position, radarposition, way):
         pygame.sprite.Sprite.__init__(self, self.containers)
+        
+        x, y = position
+        self.radar = RadarWall(radarposition, way)
 
         self.way = way
         self.set_img()
@@ -531,12 +558,46 @@ class OuterWall(Wall):
             self.image = outer_wall_portrait
         elif self.way == 'adapter':
             self.image = outer_adapter_image
+            
+
+class DamagedWall(pygame.sprite.Sprite):
+    def __init__(self, position, way, radar):
+        pygame.sprite.Sprite.__init__(self, self.containers)
+
+        x, y  = position
+        self.radar = radar
+        self.way = way
+        self.set_img()
+
+        self.width = self.image.get_width()
+        self.height = self.image.get_height()
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.default_x = x
+        self.default_y = y
+        
+    def update(self, relative_x, relative_y):
+        self.rect.x = self.default_x - relative_x
+        self.rect.y = self.default_y - relative_y
+    
+    def set_img(self):
+        if self.way == 'landscape':
+            self.image = damagedwall_landscape
+            self.radar.image = self.radar.damagedwall_landscape
+        elif self.way == 'portrait':
+            self.image = damagedwall_portrait
+            self.radar.image = self.radar.damagedwall_portrait
+        elif self.way == 'adapter':
+            self.image = damagedadapter_image
+            self.radar.image = self.radar.damagedadapter_image
         
         
 class RadarWall(pygame.sprite.Sprite):
-    def __init__(self, x, y, way):
+    def __init__(self, position, way):
         pygame.sprite.Sprite.__init__(self, self.containers)
         
+        x, y = position
         self.get_img()
         if way == 'landscape':
             self.image = self.wall_landscape
@@ -553,8 +614,11 @@ class RadarWall(pygame.sprite.Sprite):
 
     def get_img(self):
         self.wall_landscape = pygame.image.load('./imgs/radarwall.png').convert_alpha()
+        self.damagedwall_landscape = pygame.image.load('./imgs/damagedradarwall.png').convert_alpha()
         self.wall_portrait = pygame.transform.rotate(self.wall_landscape, 90)
+        self.damagedwall_portrait = pygame.transform.rotate(self.damagedwall_landscape, 90)
         self.adapter_image = pygame.image.load('./imgs/radaradapter.png').convert_alpha()
+        self.damagedadapter_image = pygame.image.load('./imgs/damagedradaradapter.png').convert_alpha()
         
         
 class RadarTank(pygame.sprite.Sprite):
@@ -676,31 +740,35 @@ def make_field(maze, maze_x, maze_y):
                     current_x += wall_width
                     radar_current_x += radarwall_width
             elif s == '_':
-                RadarWall(radar_current_x, radar_current_y + radarwall_width, 'landscape')
+                current = (current_x, current_y + wall_width)
+                radarcurrent = (radar_current_x, radar_current_y + radarwall_width)
                 if not(outer_char or outer_line):
-                    Wall(current_x, current_y + wall_width, 'landscape')
+                    Wall(current, radarcurrent, 'landscape')
                 else:
-                    OuterWall(current_x, current_y + wall_width, 'landscape')
+                    OuterWall(current, radarcurrent, 'landscape')
                 radar_current_x += radarwall_width
                 current_x += wall_width
             elif s == '.':
-                RadarWall(radar_current_x, radar_current_y + radarwall_width, 'adapter')
+                current = (current_x, current_y + wall_width)
+                radarcurrent = (radar_current_x, radar_current_y + radarwall_width)
                 if not(outer_char or outer_line):
-                    Wall(current_x, current_y + wall_width, 'adapter')
+                    Wall(current, radarcurrent, 'adapter')
                 else:
-                    OuterWall(current_x, current_y + wall_width, 'adapter')
+                    OuterWall(current, radarcurrent, 'adapter')
                 radar_current_x += radarwall_height
                 current_x += wall_height
             elif s == '|':
-                RadarWall(radar_current_x, radar_current_y, 'portrait')
-                RadarWall(radar_current_x, radar_current_y + radarwall_width, 'adapter')
+                current_1 = (current_x, current_y)
+                radarcurrent_1 = (radar_current_x, radar_current_y)
+                current_2 = (current_x, current_y + wall_width)
+                radarcurrent_2 = (radar_current_x, radar_current_y + radarwall_width)
                 if not outer_char:
-                    Wall(current_x, current_y, 'portrait')
-                    Wall(current_x, current_y + wall_width, 'adapter')
+                    Wall(current_1, radarcurrent_1, 'portrait')
+                    Wall(current_2, radarcurrent_2, 'adapter')
                     current_x += wall_height
                 else:
-                    OuterWall(current_x, current_y, 'portrait')
-                    OuterWall(current_x, current_y + wall_width, 'adapter')
+                    OuterWall(current_1, radarcurrent_1, 'portrait')
+                    OuterWall(current_2, radarcurrent_2, 'adapter')
                     current_x += wall_height
                 radar_current_x += radarwall_height
                 
@@ -800,6 +868,9 @@ def enemy_struck(receive_data):
         #当てた機体が死んでなかった時のみ得点
         if not bool(receive_data['died']):
             hit()
+    elif bullet_id in bombed_list:
+        if not bool(receive_data['died']):
+            bombhit()
             
 #敵が爆弾を置いた場合
 def enemy_bomb(receive_data):
@@ -807,12 +878,16 @@ def enemy_bomb(receive_data):
         if enemy['session_id'] == receive_data['session_id']:
             enemy['obj'].default_x = receive_data['x']
             enemy['obj'].default_y = receive_data['y']
-            enemy['obj'].bombed(receive_data['explode'])
+            enemy['obj'].bombed(receive_data['explode'], receive_data['bullet_id'])
         
 #命中時
 def hit():
     global score
     score += bullet_damage
+    
+def bombhit():
+    global score
+    score += bullet_damage * 10
 
 #初期位置の候補をランダムに
 def init_place(field_x, field_y, wall_width):
@@ -985,10 +1060,14 @@ if __name__ == '__main__':
     btn_height = 100
     
     title_surface = title_font.render(u'GunTankOnline',True,(255,255,255))
-    guestbtn = Button(u'ゲストとして参戦', pygame.Rect(0,400,btn_width, btn_height))
-    guestbtn.rect.centerx = screen.get_rect().centerx
-    loginbtn = Button(u'ログインして参戦', pygame.Rect(0,550,btn_width, btn_height))
-    loginbtn.rect.centerx = screen.get_rect().centerx
+    top_guestbtn = Button(u'ゲストとして参戦', pygame.Rect(0,400,btn_width, btn_height))
+    top_guestbtn.rect.centerx = screen.get_rect().centerx
+    top_loginbtn = Button(u'ログインして参戦', pygame.Rect(0,550,btn_width, btn_height))
+    top_loginbtn.rect.centerx = screen.get_rect().centerx
+    login_loginbtn = Button(u'ログイン', pygame.Rect(0, 600, btn_width, btn_height))
+    login_loginbtn.rect.centerx = screen.get_rect().centerx
+    login_backbtn = Button(u'戻る', pygame.Rect(0, 600, btn_width, btn_height))
+    login_backbtn.rect.left = screen.get_rect().left + 50
     
     quit = False
     state = 'init'
@@ -1008,6 +1087,8 @@ if __name__ == '__main__':
                 walls = pygame.sprite.RenderUpdates()
                 Wall.containers = all_sprites, walls
                 OuterWall.containers = all_sprites, walls
+                damagedwalls = pygame.sprite.RenderUpdates()
+                DamagedWall.containers = all_sprites, damagedwalls
                 bullets = pygame.sprite.RenderUpdates()
                 Bullet.containers = all_sprites, bullets
                 radarwalls = pygame.sprite.RenderUpdates()
@@ -1022,12 +1103,15 @@ if __name__ == '__main__':
                 OuterGround.containers = all_sprites, outergrounds
                 bombs = pygame.sprite.RenderUpdates()
                 Bomb.containers = all_sprites, bombs
+                craters = pygame.sprite.RenderUpdates()
+                Crater.containers = all_sprites, craters
                 
                 #敵が被弾した弾リスト初期化
                 struckted_bullet_list = list()
                 
                 #自分が打った弾リスト
                 fired_bullet_list = list()
+                bombed_list = list()
                 
                 tank_dataset = json.loads(urllib2.urlopen('http://{}/tankdata'.format(server_addr)).read())
                 
@@ -1038,26 +1122,24 @@ if __name__ == '__main__':
                 for event in pygame.event.get():
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                         #ゲスト参戦クリック
-                        if guestbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                        if top_guestbtn.rect.collidepoint(pygame.mouse.get_pos()):
                             select_tanks = place_select_tank(6, 3, tank_dataset)
+                            user_id = None
+                            password = None
                             state = 'select'
                         #ログイン参戦クリック
-                        elif loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                        elif top_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
                             textboxes = [
                                 TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
                                 TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
-                            btn = Button(u'ログイン',
-                                pygame.Rect(0,screen_width/2-200+textbox_height*3.5,
-                                btn_width, btn_height))
-                            btn.rect.centerx = screen.get_rect().centerx
                             state = 'login'
 
                     screen.fill((0,0,0))
                     title_rect = title_surface.get_rect()
                     title_rect.center = (screen_width/2, 50)
                     screen.blit(title_surface, title_rect)
-                    guestbtn.update(screen)
-                    loginbtn.update(screen)
+                    top_guestbtn.update(screen)
+                    top_loginbtn.update(screen)
                     
             elif state == 'login':
                 screen.fill((0,0,0))
@@ -1073,23 +1155,40 @@ if __name__ == '__main__':
                             if box.selected:
                                 input_entered = box.char_add(event)
                     elif event.type == pygame.MOUSEBUTTONDOWN:
-                        if event.button == 1:
+                        if event.button == 1 and state=='login':
                             for box in textboxes:
                                 if box.rect.collidepoint(pygame.mouse.get_pos()):
                                     box.selected = True
                                 else:
                                     box.selected = False
-                                if btn.rect.collidepoint(pygame.mouse.get_pos()):
+                                if login_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
                                     id_input = textboxes[0].string
                                     pass_input = textboxes[1].string
                                     if id_input and pass_input:
                                         user_id = id_input
                                         password = pass_input
+                                        state = 'auth'
                                         select_tanks = place_select_tank(6, 3, tank_dataset)
-                                        state = 'select'
+                                        
+                                elif login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                                    state = 'init'
+                                    
+
+                                        
                 for box in textboxes:
                     box.update(screen)
-                btn.update(screen)
+                login_loginbtn.update(screen)
+                login_backbtn.update(screen)
+                
+            elif state == 'auth':
+                data = json.loads(urllib2.urlopen(
+                                'http://{}/user?id={}&pass={}'.format(server_addr,user_id,password)).read())
+                if data['auth'] == False:
+                    print('Auth fail')
+                    state = 'init'
+                else:
+                    print('score: {}'.format(data['userdat'][1]))
+                    state = 'select'
 
             #機体選択
             elif state == 'select':
@@ -1100,6 +1199,8 @@ if __name__ == '__main__':
                             if select_tank.rect.collidepoint(pygame.mouse.get_pos()):
                                 mytank_id = i
                                 state = 'attend'
+                        if login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                            state = 'init'
 
                 screen.fill((0,0,0))
                 color = (255,255,255)
@@ -1108,11 +1209,17 @@ if __name__ == '__main__':
                 page_surface = title_font.render(page_name, True, color)
                 screen.blit(page_surface, title_rect.midbottom)
                 [select_tank.update() for select_tank in select_tanks]
+                #戻るボタン
+                login_backbtn.update(screen)
 
             #参戦選択後の処理
             elif state == 'attend':
                 #自機データ送信,セッションID取得
-                data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
+                if user_id:
+                    data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id, 'id':user_id, 'pass':password}
+                else:
+                    data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
+                    
                 mysession_id = int(json.loads(urllib2.urlopen('http://{}/attend?json={}'.format(server_addr,
                                               urllib2.quote(json.dumps(data)))).read())['session_id'])
                 #ポーリングで何秒待ってるか
@@ -1182,12 +1289,16 @@ if __name__ == '__main__':
                                     tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage, tank_id, True,
                                     accel_ratio, brake_ratio)
                     else:
+                        name = player['name']
+                        if not name:
+                            name = 'GUEST'
                         #敵obj生成
                         enemy_list.append({
                             'obj':Tank(0,0,'right',tank_speed,bullet_speed,bullet_per_sec,hp,bullet_damage,tank_id),
                             'ipaddr':player['ipaddr'],
                             'port':player['port'],
-                            'session_id':player['session_id']})
+                            'session_id':player['session_id'],
+                            'name':name})
 
                 #画像準備
                 wall_landscape = pygame.image.load('./imgs/wall.png').convert()
@@ -1198,6 +1309,9 @@ if __name__ == '__main__':
                 outer_adapter_image = pygame.image.load('./imgs/outer_adapter.png').convert()
                 ground_image = pygame.image.load('./imgs/ground.png').convert()
                 outer_ground_image = pygame.image.load('./imgs/outer_ground.png').convert()
+                damagedwall_landscape = pygame.image.load('./imgs/damagedwall.png').convert()
+                damagedwall_portrait = pygame.transform.rotate(damagedwall_landscape, 90)
+                damagedadapter_image = pygame.image.load('./imgs/damagedadapter.png').convert()
 
                 field_x, field_y = make_field(maze, maze_x, maze_y)
                 make_ground(maze_x, maze_y)
@@ -1265,9 +1379,11 @@ if __name__ == '__main__':
                 #各オブジェクトをupdate
                 tanks.update(mytank.relative_x, mytank.relative_y, countdown)
                 walls.update(mytank.relative_x, mytank.relative_y)
+                damagedwalls.update(mytank.relative_x, mytank.relative_y)
                 bullets.update(mytank.relative_x, mytank.relative_y)
                 grounds.update(mytank.relative_x, mytank.relative_y)
                 outergrounds.update()
+                craters.update(mytank.relative_x, mytank.relative_y)
                 
                 #固定obj(壁,アダプタ),他の機体と機体との当たり判定
                 if pygame.sprite.spritecollideany(mytank, walls):
@@ -1311,10 +1427,13 @@ if __name__ == '__main__':
                 outergrounds.draw(screen)
                 grounds.draw(screen)
                 bullets.draw(screen)
+                craters.draw(screen)
+                damagedwalls.draw(screen)
+                walls.draw(screen)
+                tanks.draw(screen)
+                
                 #爆弾アニメを更新・表示
                 bombs.update(mytank.relative_x, mytank.relative_y)
-                tanks.draw(screen)
-                walls.draw(screen)
                 
                 #爆発アニメーションを更新/表示
                 explodes.update(mytank.relative_x, mytank.relative_y)
@@ -1322,9 +1441,7 @@ if __name__ == '__main__':
                 #自機死亡・全滅確認
                 died_list = list()
                 for enemy_data in enemy_list:
-                    #TODO tankname 動的取得
-                    tankname = 'NAME1'
-                    
+                    tankname = enemy_data['name']
                     enemy = enemy_data['obj']
                     
                     if enemy.hp <= 0:
@@ -1475,9 +1592,9 @@ if __name__ == '__main__':
                 current_y = 200
                 for i,session in enumerate(sorted_session):
                     if not session['score']==-1:
-                        rank_text = u'第{}位:  {}  {}points'.format(i+1,session['session_id'],session['score'])
+                        rank_text = u'第{}位:  {}  {}points'.format(i+1,session['name'],session['score'])
                     else:
-                        rank_text = u'第{}位:  {}  DISCONNECTED'.format(i+1,session['session_id'])
+                        rank_text = u'第{}位:  {}  DISCONNECTED'.format(i+1,session['name'])
                     rank_surface = ranking_font.render(rank_text, True, color)
                     screen.blit(rank_surface, (current_x, current_y))
                     current_y += 30
