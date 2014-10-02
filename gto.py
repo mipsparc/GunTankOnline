@@ -53,8 +53,9 @@ class Tank(pygame.sprite.Sprite):
         self.image = self.origin_image
 
         self.bullet_passed_sec = 0
-        self.bomb_passed_sec = 0
-        self.bomb_per_sec = 0.5
+        self.bomb_per_sec = 0.2
+        self.bomb_wait_sec = 1 / self.bomb_per_sec
+        self.bomb_passed_sec = self.bomb_wait_sec
 
         self.radar = RadarTank(self)
         
@@ -74,6 +75,9 @@ class Tank(pygame.sprite.Sprite):
             self.default_y = y
 
     def update(self, relative_x, relative_y, countdown):
+        #今死んだ場合
+        if not self.died and self.hp <= 0:
+            self.deadtime = nowtime()
         self.died = self.hp <= 0
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
@@ -180,7 +184,7 @@ class Tank(pygame.sprite.Sprite):
                 #ボム
                 self.bomb_passed_sec += passed_seconds
                 if pressed_keys[K_x] and \
-                        self.bomb_passed_sec * self.bomb_per_sec >= 1:
+                        self.bomb_passed_sec >= self.bomb_wait_sec:
                     self.bombed()
                     self.bomb_passed_sec = 0
             
@@ -233,7 +237,7 @@ class Tank(pygame.sprite.Sprite):
         if self.center:
             self.hp -= bullet_damage
         #死亡時のグラ入れ替え
-        if self.hp <= 0:
+        if self.died:
             self.origin_image = pygame.image.load(diedtank_id_file[tank_id]).convert_alpha()
             if self.way == 'up':
                 self.up_image = pygame.transform.rotate(self.origin_image, 270)
@@ -472,7 +476,7 @@ class Bomb(pygame.sprite.Sprite):
             detect_sprite.rect = self.explode.explode_anim.getFrame(0).get_rect()
             detect_sprite.rect.center = (self.default_x - relative_x, self.default_y - relative_y)
             #壁破壊
-            damage_walls = pygame.sprite.spritecollide(detect_sprite, walls, False)
+            damage_walls = pygame.sprite.spritecollide(detect_sprite, walls, False, pygame.sprite.collide_circle)
             for damage_wall in damage_walls:
                 #Outerでないとき
                 if damage_wall.__class__.__name__ == 'Wall':
@@ -1011,11 +1015,6 @@ if __name__ == '__main__':
     radar_init_x = screen_width - 350
     radar_init_y = 30
     
-    #スコア表示位置
-    score_init_y = radar_init_y + radar_img.get_height() + 30
-    
-    resttime_init_y = score_init_y + 50
-    
     #HPバー
     hp_green_img = pygame.image.load('./imgs/hp_green.png').convert_alpha()
     hp_red_img = pygame.image.load('./imgs/hp_red.png').convert_alpha()
@@ -1024,12 +1023,13 @@ if __name__ == '__main__':
     #HP/名前の背景
     statusback_img = pygame.image.load('./imgs/statusback.png').convert_alpha()
     #自機ステータス
-    mystatusback_img = pygame.image.load('./imgs/mystatusback.png').convert()
+    mystatusback_img = pygame.image.load('./imgs/mystatusback.png').convert_alpha()
     mystatus_x = screen_width - 410
-    mystatus_y = screen_height - 150
+    mystatus_y = screen_height - 190
     myhp_green_img = pygame.image.load('./imgs/myhp_green.png').convert()
     myhp_red_img = pygame.image.load('./imgs/myhp_red.png').convert()
     myhpbarback_img = pygame.image.load('./imgs/myhpback.png').convert()
+    mybombbar_img = pygame.image.load('./imgs/mybombbar.png').convert()
     
     #爆発アニメ
     explode_anim_imgs = [pygame.image.load('./imgs/explode/{}.png'.format(n)).convert_alpha() for n in range(15)]
@@ -1049,8 +1049,7 @@ if __name__ == '__main__':
     tankname_font = pygame.font.Font('ipagp.ttf', 20)
     mystatus_font = pygame.font.Font('ipagp.ttf', 30)
     myhp_descript =  mystatus_font.render('HP', True, (255,255,255))
-    myshot_descript =  mystatus_font.render('Shot', True, (255,255,255))
-    mybomb_descript =  mystatus_font.render('Bomb', True, (255,255,255))
+    mybomb_descript =  mystatus_font.render('BOMB', True, (255,255,255))
     score_font = pygame.font.Font('ipagp.ttf', 40)
     waitmessage_font = pygame.font.Font('ipagp.ttf',40)
     waitsecs_font = pygame.font.Font('ipagp.ttf',200)
@@ -1227,8 +1226,10 @@ if __name__ == '__main__':
                 else:
                     data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
                     
-                mysession_id = int(json.loads(urllib2.urlopen('http://{}/attend?json={}'.format(server_addr,
-                                              urllib2.quote(json.dumps(data)))).read())['session_id'])
+                data = json.loads(urllib2.urlopen('http://{}/attend?json={}'.format(server_addr,
+                                              urllib2.quote(json.dumps(data)))).read())
+                mysession_id = data['session_id']
+                myname = data['name']
                 #ポーリングで何秒待ってるか
                 poll_secs = 0
                 state = 'wait'
@@ -1274,7 +1275,7 @@ if __name__ == '__main__':
                 data = json.loads(urllib2.urlopen('http://{}/start?battle_id={}'.format(server_addr, battle_id)).read())
                 maze = data[0]
                 players = data[1]
-                tank_dataset = data[2]
+                tank_dataset = data[3]
 
                 #敵のステータスを初期ステータスから割り付け
                 for player in players:
@@ -1319,6 +1320,8 @@ if __name__ == '__main__':
                 damagedwall_landscape = pygame.image.load('./imgs/damagedwall.png').convert()
                 damagedwall_portrait = pygame.transform.rotate(damagedwall_landscape, 90)
                 damagedadapter_image = pygame.image.load('./imgs/damagedadapter.png').convert()
+                
+                myname_descript = mystatus_font.render(myname, True, (255,255,255))
 
                 field_x, field_y = make_field(maze, maze_x, maze_y)
                 make_ground(maze_x, maze_y)
@@ -1397,14 +1400,14 @@ if __name__ == '__main__':
                 if pygame.sprite.spritecollideany(mytank, walls):
                     #プラス方向に移動した場合
                     if last_relative_x < mytank.relative_x:
-                        mytank.relative_x -= 2*(mytank.relative_x - last_relative_x)
+                        mytank.relative_x -= int(2*(mytank.relative_x - last_relative_x))
                     elif last_relative_x > mytank.relative_x:
-                        mytank.relative_x += 2*(last_relative_x - mytank.relative_x)
+                        mytank.relative_x += int(2*(last_relative_x - mytank.relative_x))
                     
                     if last_relative_y < mytank.relative_y:
-                        mytank.relative_y -= 2*(mytank.relative_y - last_relative_y)
+                        mytank.relative_y -= int(2*(mytank.relative_y - last_relative_y))
                     elif last_relative_y > mytank.relative_y:
-                        mytank.relative_y += 2*(last_relative_y - mytank.relative_y)
+                        mytank.relative_y += int(2*(last_relative_y - mytank.relative_y))
                    
                     walls.update(mytank.relative_x, mytank.relative_y)
                     tanks.update(mytank.relative_x, mytank.relative_y, countdown)
@@ -1452,7 +1455,7 @@ if __name__ == '__main__':
                     tankname = enemy_data['name']
                     enemy = enemy_data['obj']
                     
-                    if enemy.hp <= 0:
+                    if enemy.died:
                         died_list.append(True)
                     else:
                         died_list.append(False)
@@ -1498,23 +1501,25 @@ if __name__ == '__main__':
                 radartanks.draw(screen)
                 radarwalls.draw(screen)
                 
-                #スコア表示
-                score_surface = score_font.render(u'Score {}'.format(score), True, (255,255,255), (0,0,0))
-                screen.blit(score_surface, (screen_width-score_surface.get_width()-20, score_init_y))
-                
-                #制限時間表示
+                #自機ステータス表示
+                mystatus_rect = mystatusback_img.get_rect()
+                mystatus_rect.topleft = (mystatus_x, mystatus_y)
+                screen.blit(mystatusback_img, mystatus_rect)
+                #自機名前
+                screen.blit(myname_descript, (mystatus_x+5, mystatus_y+5))
+                #残り秒数,スコア
                 if not countdown:
                     resttime = int(battle_starttime+battle_duration-nowtime())
                     if resttime < 0:
                         resttime = 0
-                    resttime_surface = score_font.render(u'残り {}秒'.format(resttime), True, (255,255,255), (0,0,0))
-                    screen.blit(resttime_surface, (screen_width-resttime_surface.get_width()-20, resttime_init_y))
-                
-                #自機ステータス表示
-                screen.blit(mystatusback_img, (mystatus_x, mystatus_y))
+                    secscore_surface = mystatus_font.render('{}points/{}sec'.format(score,resttime),True,(255,255,255))
+                    secscore_rect = secscore_surface.get_rect()
+                    secscore_rect.right = mystatus_rect.right - 5
+                    secscore_rect.top = mystatus_rect.top + 40
+                    screen.blit(secscore_surface, secscore_rect)
                 #自機HP
-                screen.blit(myhp_descript, (mystatus_x + 5, mystatus_y + 5))
-                screen.blit(myhpbarback_img, (mystatus_x + 105, mystatus_y + 5))
+                screen.blit(myhp_descript, (mystatus_x+5, mystatus_y+90))
+                screen.blit(myhpbarback_img, (mystatus_x+105, mystatus_y+90))
                 myhp_percent = (float(mytank.hp) / mytank.default_hp)*100
                 if myhp_percent > 40:
                     myhpbar_img = myhp_green_img
@@ -1525,21 +1530,28 @@ if __name__ == '__main__':
                     myhpbar_length = int((myhp_percent/100) * myhp_green_img.get_width())
                 else:
                     myhpbar_length = 0      #マイナスを考慮
-                screen.blit(myhpbar_img, (mystatus_x + 105, mystatus_y + 5),
+                screen.blit(myhpbar_img, (mystatus_x + 105, mystatus_y + 90),
                             area=pygame.Rect(0, 0, myhpbar_length, myhp_green_img.get_height()))
-                            
-                #ショットたまり具合
-                screen.blit(myshot_descript, (mystatus_x + 5, mystatus_y + 40))
+                #自機ボム
+                screen.blit(mybomb_descript, (mystatus_x+5, mystatus_y+125))
+                screen.blit(myhpbarback_img, (mystatus_x+105, mystatus_y+125))
+                try:
+                    bomb_ratio = mytank.bomb_passed_sec/mytank.bomb_wait_sec
+                    if bomb_ratio>1: bomb_ratio=1
+                    mybomb_length = bomb_ratio* myhp_green_img.get_width()
+                except ZeroDivisionError:
+                    mybomb_length = 0
+                screen.blit(mybombbar_img, (mystatus_x + 105, mystatus_y + 125),
+                            area=pygame.Rect(0, 0, mybomb_length, myhp_green_img.get_height()))
                 
-                #ボム数
-                screen.blit(mybomb_descript, (mystatus_x + 5, mystatus_y + 75))
+                
                 
                 #開始カウントダウン
                 if countdown:
                     count_sec =  str(int(end_countdown - nowtime()))
                     if count_sec == '0':
                         count_sec = 'START'
-                        battle_starttime = time.time()
+                        battle_starttime = nowtime()
                         #接続失敗ノードの切り離し
                         for enemy_data in enemy_list:
                             enemy = enemy_data['obj']
@@ -1564,25 +1576,28 @@ if __name__ == '__main__':
                 #自機を含めて誰か一人だけになったか終了時刻の場合は終了
                 if not countdown and (died_list.count(False)<=1 or battle_starttime+battle_duration <= nowtime()):
                     if not finish_screen:
+                        block = True
                         s = pygame.Surface((screen_width, screen_height), SRCALPHA)
                         s.fill((0,0,0,128))
                         finish_surface = start_font.render('FINISH', True, (255,255,255))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                     screen_height/2-count_sec_surface.get_height()/2))
-                        end_display_finish = time.time() + 5
+                        end_display_finish = nowtime() + 5
                         screen.blit(s, (0,0))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                     screen_height/2-count_sec_surface.get_height()/2))
                         #スコアアップロード
-                        urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}'.format(
-                            server_addr, battle_id, mysession_id, score))
+                        if not mytank.died:
+                            mytank.deadtime = 2147483647 #max
+                        urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}&deadtime={}'.format(
+                            server_addr, battle_id, mysession_id, score, mytank.deadtime))
                         finish_screen = True
                         
                     else:
                         screen.blit(s, (0,0))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                     screen_height/2-count_sec_surface.get_height()/2))
-                        if time.time() > end_display_finish:
+                        if nowtime() > end_display_finish:
                             print('Finished')
                             data = json.loads(urllib2.urlopen('http://{}/ranking?battle_id={}'.format(
                                                 server_addr, battle_id)).read())

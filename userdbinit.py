@@ -26,7 +26,7 @@ usernum = 6000
 for i in xrange(1000,usernum):
     userid = str(i)
     password = str(random.randint(100,999))
-    username = 'USER'
+    username = None
     score = 0
     visible = True
     

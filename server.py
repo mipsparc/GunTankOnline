@@ -135,19 +135,25 @@ def attend():
     ipaddr = data['ipaddr']
     port = data['port']
     tank_id = data['tank_id']
+    #ユーザかの判定はidがNoneかどうか
     user_id = data.get('id')
     password = data.get('pass')
     if user_id and password:
         if not auth(user_id, password):
             #認証失敗時は0を返す
             return json.dumps({'session_id':0})
-        name, score = get_userdata(user_id)
+        name, totalscore = get_userdata(user_id)
+        #名称未設定時
+        if name is None:
+            name = 'USER{}'.format(len(db['waitlist']))
+        is_user = True
 
     else:
-        name = None
+        name = 'GUEST{}'.format(len(db['waitlist']))
 
     session_id = random.randint(1,99999999)
     
+    #新規バトル待機開始
     if db['start_time'] <= time.time():
         print('cleared waitlist')
         db['wait_for_start'] = False
@@ -160,7 +166,7 @@ def attend():
                            'id':user_id,'name':name,'session_id':session_id, 'score':-1})
     set_db(db)
     
-    return json.dumps({'session_id':session_id})
+    return json.dumps({'session_id':session_id,'name':name})
 
 #待機人数と開始時刻の確認
 @app.route('/check')
@@ -186,27 +192,30 @@ def start():
     #そのバトルが初回アクセス時
     if not battle_id in db['battlelist']:
         stage = random.choice(stage_list)
-        db['battlelist'][battle_id] = [stage, db['waitlist']]
+        #3番めはclosedフラグ
+        db['battlelist'][battle_id] = [stage, db['waitlist'], False]
         set_db(db)
     
     return json.dumps(db['battlelist'][battle_id]+[tank_dataset])
 
 #スコアを報告
-#query: battle_id, session_id, score
+#query: battle_id, session_id, score, deadtime
 @app.route('/score')
 def score():
     battle_id = request.args['battle_id']
     session_id = int(request.args['session_id'])
     score = int(request.args['score'])
+    deadtime = float(request.args['deadtime'])
     db = get_db()
     for i,session in  enumerate(db['battlelist'][battle_id][1]):
         if session['session_id'] == session_id:
             db['battlelist'][battle_id][1][i]['score'] = score
+            db['battlelist'][battle_id][1][i]['deadtime'] = deadtime
             userid = db['battlelist'][battle_id][1][i]['id']
     set_db(db)
     
-    #スコアをユーザの時は記録
-    if userid:
+    #ユーザの時はスコアを記録
+    if userid is not None:
         users = get_userdb()
         for i,user in enumerate(users):
             if users[i]['id'] == userid:
@@ -221,6 +230,11 @@ def score():
 def ranking():
     db = get_db()
     battle_id = request.args['battle_id']
+    #closedしてない(初回アクセス時)
+    if not db['battlelist'][battle_id][2]:
+        db['battlelist'][battle_id][2] = True
+    set_db(db)
+
     return json.dumps(db['battlelist'][battle_id][1])
 
 #tank_dataset を返す
