@@ -79,6 +79,7 @@ class Tank(pygame.sprite.Sprite):
         if not self.died and self.hp <= 0:
             self.deadtime = nowtime()
         self.died = self.hp <= 0
+
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
         
@@ -188,14 +189,21 @@ class Tank(pygame.sprite.Sprite):
                     self.bombed()
                     self.bomb_passed_sec = 0
             
-            #画面左上の座標
-            self.relative_x += x_diff
-            self.relative_y += y_diff
+                #画面左上の座標
+                self.relative_x += x_diff
+                self.relative_y += y_diff
+
+        else:
+            self.rect.x = self.default_x - relative_x
+            self.rect.y = self.default_y - relative_y
+            
+        if not viewer and self.center:
             #中心の座標
             self.x = self.relative_x + screen_width/2
             self.y = self.relative_y + screen_height/2
-
-        else:
+            self.default_x = self.x - self.image.get_width()/2
+            self.default_y = self.y - self.image.get_height()/2
+        if viewer and self.center:
             self.rect.x = self.default_x - relative_x
             self.rect.y = self.default_y - relative_y
 
@@ -231,8 +239,6 @@ class Tank(pygame.sprite.Sprite):
         else:
             Bullet(self, speed,bullet_id, self.bullet_damage, colid_point)
            
-        
-
     def struck(self, bullet_damage=None):
         if self.center:
             self.hp -= bullet_damage
@@ -433,7 +439,7 @@ class Bullet(pygame.sprite.Sprite):
                     'hp':mytank.hp,
                     'x':self.default_x,
                     'y':self.default_y,
-                    'died':self.tank.died
+                    'died':mytank.died
                     })
             Explode(self.default_x, self.default_y)
             
@@ -960,7 +966,8 @@ def place_select_tank(tank_types, num_tank_row, tank_dataset):
 
 if __name__ == '__main__':
     #debug
-    if raw_input('localhost?(y)> ')=='y':
+    input_txt = raw_input('localhost?(y)> ')
+    if input_txt == 'y':
         debug = True
         server_addr = '127.0.0.1:5000'
         receive_port = int(raw_input('RECV PORT> '))
@@ -969,8 +976,12 @@ if __name__ == '__main__':
         debug = False
         receive_port = 8800
     
-    screen_width = 1024
-    screen_height = 768
+    if debug:
+        screen_width = 1024
+        screen_height = 768
+    else:
+        screen_width = 1920
+        screen_height = 1080
     #tank_idに対応したファイル名
     tank_id_file = ('./imgs/0_tank.png','./imgs/1_tank.png','./imgs/2_tank.png','./imgs/3_tank.png',
                     './imgs/4_tank.png','./imgs/5_tank.png')
@@ -983,7 +994,10 @@ if __name__ == '__main__':
     maze_x = 10
     maze_y = 10
     
-    screen = pygame.display.set_mode([screen_width, screen_height])
+    if debug:
+        screen = pygame.display.set_mode((screen_width, screen_height))
+    else:
+        screen = pygame.display.set_mode((screen_width, screen_height), FULLSCREEN)
 
     pygame.display.set_caption('GTO -Gun Tank Online-')
     clock = pygame.time.Clock()
@@ -1048,9 +1062,10 @@ if __name__ == '__main__':
     title_font = pygame.font.Font('ipagp.ttf',70)
     tankname_font = pygame.font.Font('ipagp.ttf', 20)
     mystatus_font = pygame.font.Font('ipagp.ttf', 30)
-    myhp_descript =  mystatus_font.render('HP', True, (255,255,255))
+    myhp_descript =  mystatus_font.render(' HP', True, (255,255,255))
     mybomb_descript =  mystatus_font.render('BOMB', True, (255,255,255))
-    score_font = pygame.font.Font('ipagp.ttf', 40)
+    mydead_font = pygame.font.Font('ipagp.ttf', 65)
+    mydead_surface = mydead_font.render('D E A D', True, (255,255,255))
     waitmessage_font = pygame.font.Font('ipagp.ttf',40)
     waitsecs_font = pygame.font.Font('ipagp.ttf',200)
     countdown_font = pygame.font.Font('ipagp.ttf',500)
@@ -1178,8 +1193,6 @@ if __name__ == '__main__':
                                         
                                 elif login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
                                     state = 'init'
-                                    
-
                                         
                 for box in textboxes:
                     box.update(screen)
@@ -1341,6 +1354,7 @@ if __name__ == '__main__':
                 block = True
                 countdown = True
                 finish_screen = False
+                viewer = False
 
                 #初期位置設定
                 while True:
@@ -1371,6 +1385,19 @@ if __name__ == '__main__':
 
             #ゲーム中
             elif state == 'play':
+                #観戦モード
+                viewer_speed = 2000
+                pressed_keys = pygame.key.get_pressed()
+                if viewer:
+                    if pressed_keys[K_UP] or pressed_keys[K_w]:
+                        mytank.relative_y -= viewer_speed * passed_seconds
+                    elif pressed_keys[K_DOWN] or pressed_keys[K_s]:
+                        mytank.relative_y += viewer_speed * passed_seconds
+                    elif pressed_keys[K_LEFT] or pressed_keys[K_a]:
+                        mytank.relative_x -= viewer_speed * passed_seconds
+                    elif pressed_keys[K_RIGHT] or pressed_keys[K_d]:
+                        mytank.relative_x += viewer_speed * passed_seconds
+                    
                 #受信データを確認
                 while not receive_queue.empty():
                     receive_data, ipaddr =  receive_queue.get(block=False)
@@ -1420,8 +1447,7 @@ if __name__ == '__main__':
                     tanks.update(mytank.relative_x, mytank.relative_y, countdown)
                     
                 #機体が動いた場合に送信
-                if last_relative_x != mytank.relative_x or \
-                        last_relative_y != mytank.relative_y:
+                if (last_relative_x != mytank.relative_x or last_relative_y != mytank.relative_y) and not viewer:
                             send_queue.put({
                                 'addresses':addresses,
                                 'session_id':mysession_id,
@@ -1517,34 +1543,44 @@ if __name__ == '__main__':
                     secscore_rect.right = mystatus_rect.right - 5
                     secscore_rect.top = mystatus_rect.top + 40
                     screen.blit(secscore_surface, secscore_rect)
-                #自機HP
-                screen.blit(myhp_descript, (mystatus_x+5, mystatus_y+90))
-                screen.blit(myhpbarback_img, (mystatus_x+105, mystatus_y+90))
-                myhp_percent = (float(mytank.hp) / mytank.default_hp)*100
-                if myhp_percent > 40:
-                    myhpbar_img = myhp_green_img
-                else:
-                    myhpbar_img = myhp_red_img
-
+                    
                 if not mytank.died:
-                    myhpbar_length = int((myhp_percent/100) * myhp_green_img.get_width())
+                    #自機HP
+                    screen.blit(myhp_descript, (mystatus_x+5, mystatus_y+90))
+                    screen.blit(myhpbarback_img, (mystatus_x+105, mystatus_y+90))
+                    myhp_percent = (float(mytank.hp) / mytank.default_hp)*100
+                    if myhp_percent > 40:
+                        myhpbar_img = myhp_green_img
+                    else:
+                        myhpbar_img = myhp_red_img
+
+                    if not mytank.died:
+                        myhpbar_length = int((myhp_percent/100) * myhp_green_img.get_width())
+                    else:
+                        myhpbar_length = 0      #マイナスを考慮
+                    screen.blit(myhpbar_img, (mystatus_x + 105, mystatus_y + 90),
+                                area=pygame.Rect(0, 0, myhpbar_length, myhp_green_img.get_height()))
+                    #自機ボム
+                    screen.blit(mybomb_descript, (mystatus_x+5, mystatus_y+125))
+                    screen.blit(myhpbarback_img, (mystatus_x+105, mystatus_y+125))
+                    try:
+                        bomb_ratio = mytank.bomb_passed_sec/mytank.bomb_wait_sec
+                        if bomb_ratio>1: bomb_ratio=1
+                        mybomb_length = bomb_ratio* myhp_green_img.get_width()
+                    except ZeroDivisionError:
+                        mybomb_length = 0
+                    screen.blit(mybombbar_img, (mystatus_x + 105, mystatus_y + 125),
+                                area=pygame.Rect(0, 0, mybomb_length, myhp_green_img.get_height()))
                 else:
-                    myhpbar_length = 0      #マイナスを考慮
-                screen.blit(myhpbar_img, (mystatus_x + 105, mystatus_y + 90),
-                            area=pygame.Rect(0, 0, myhpbar_length, myhp_green_img.get_height()))
-                #自機ボム
-                screen.blit(mybomb_descript, (mystatus_x+5, mystatus_y+125))
-                screen.blit(myhpbarback_img, (mystatus_x+105, mystatus_y+125))
-                try:
-                    bomb_ratio = mytank.bomb_passed_sec/mytank.bomb_wait_sec
-                    if bomb_ratio>1: bomb_ratio=1
-                    mybomb_length = bomb_ratio* myhp_green_img.get_width()
-                except ZeroDivisionError:
-                    mybomb_length = 0
-                screen.blit(mybombbar_img, (mystatus_x + 105, mystatus_y + 125),
-                            area=pygame.Rect(0, 0, mybomb_length, myhp_green_img.get_height()))
+                    #自機死亡時にDEAD表示
+                    mydead_rect = mydead_surface.get_rect()
+                    mydead_rect.centerx = mystatus_rect.centerx
+                    mydead_rect.y = mystatus_y + 90
+                    screen.blit(mydead_surface, mydead_rect)
                 
-                
+                #死亡時に自動的にビューアモードに遷移
+                if mytank.died:
+                    viewer = True
                 
                 #開始カウントダウン
                 if countdown:
