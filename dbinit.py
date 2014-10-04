@@ -22,5 +22,7 @@ set_db({'waitlist':list(),
         'battlelist':dict(),
         'wait_for_start':False,
         'start_time':0,
-        'battle_id':0,})
+        'battle_id':0,
+        'connection':0,
+        'battles':0})
 print(u'試合管理データベース 初期化完了')

@@ -53,10 +53,10 @@ class Button(object):
     def __init__(self, text, rect):
         self.text = text
         self.is_hover = False
-        self.default_color = (150,150,150)
-        self.hover_color = (255,255,255)
-        self.font_color = (0,0,0)
-        rect.width = self.label().get_width()
+        self.default_color = (147,184,202)
+        self.hover_color = (176,194,202)
+        self.font_color = (255,255,255)
+        rect.width = self.label().get_width()+30
         self.rect = rect
        
     def label(self):
@@ -73,7 +73,7 @@ class Button(object):
            
     def update(self, screen):
         pygame.draw.rect(screen, self.color(), self.rect)
-        screen.blit(self.label(), self.rect)
+        screen.blit(self.label(), (self.rect.left+15,self.rect.top+10))
        
         #change color if mouse over button
         self.check_hover(pygame.mouse.get_pos())

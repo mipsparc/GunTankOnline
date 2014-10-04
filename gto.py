@@ -14,6 +14,7 @@ import urllib2
 from textbox import TextBox, Button
 import pyganim
 from math import ceil #切り上げ
+import getpass
 
 
 class Tank(pygame.sprite.Sprite):
@@ -135,9 +136,8 @@ class Tank(pygame.sprite.Sprite):
                     if self.x_speed > self.speed: self.x_speed = self.speed
                     self.y_speed = int(self.y_speed * brake_ratio * 0.5)
                 
-                #FOR DEBUG!! TEST
-                #強制終了
-                elif pressed_keys[K_q]:
+                #自殺
+                elif pressed_keys[K_q] and pygame.key.get_mods() & KMOD_CTRL:
                     print('SUICIDED')
                     self.struck(self.hp)
                     send_queue.put({
@@ -240,6 +240,7 @@ class Tank(pygame.sprite.Sprite):
             Bullet(self, speed,bullet_id, self.bullet_damage, colid_point)
            
     def struck(self, bullet_damage=None):
+        self.died = self.hp <= 0
         if self.center:
             self.hp -= bullet_damage
         #死亡時のグラ入れ替え
@@ -298,7 +299,7 @@ class Bullet(pygame.sprite.Sprite):
                 self.default_x = screen_width/2 + tank.relative_x + tank.height/2
                 self.default_y = screen_height/2 + tank.relative_y
             else:
-                self.default_x = tank.default_x + tank.width/2
+                self.default_x = tank.default_x + tank.height/2
                 self.default_y = tank.default_y
             self.image = pygame.transform.rotate(self.origin_image, 90)
         elif tank.way == 'down':
@@ -306,7 +307,7 @@ class Bullet(pygame.sprite.Sprite):
                 self.default_x = screen_width/2 + tank.relative_x + tank.height/2
                 self.default_y = screen_height/2 + tank.relative_y + tank.width
             else:
-                self.default_x = tank.default_x + tank.width/2
+                self.default_x = tank.default_x + tank.height/2
                 self.default_y = tank.default_y + tank.width
             self.image = pygame.transform.rotate(self.origin_image, 270)
         elif tank.way == 'left':
@@ -494,7 +495,7 @@ class Bomb(pygame.sprite.Sprite):
             #自機に当たったかどうか
             damaged = pygame.sprite.collide_rect(mytank, detect_sprite)
             if damaged:
-                damage_hp = 100
+                damage_hp = 250
                 mytank.struck(damage_hp)
                 send_queue.put({
                     'addresses':addresses,
@@ -972,7 +973,12 @@ if __name__ == '__main__':
         server_addr = '127.0.0.1:5000'
         receive_port = int(raw_input('RECV PORT> '))
     else:
-        server_addr = raw_input('ServerAddr> ')
+        print(u'トラブル発生の原因となるので、部員以外の起動を禁じます')
+        print(u'インターネットオプションの変更,実行ディレクトリが配布提出でないことを確認すること')
+        start_password = getpass.getpass()
+        if not start_password == '19238':
+            exit()
+        server_addr = '192.168.1.207:5000'
         debug = False
         receive_port = 8800
     
@@ -1019,7 +1025,7 @@ if __name__ == '__main__':
     radarwall_width = check_img.get_width()
     radarwall_height = check_img.get_height()
     
-    check_img = pygame.image.load('./imgs/ground.png')
+    check_img = pygame.image.load('./imgs/ground.jpg')
     ground_width = check_img.get_width()
     ground_height = check_img.get_height()
     
@@ -1059,36 +1065,44 @@ if __name__ == '__main__':
     send_process.start()
     receive_process.start()
     
-    title_font = pygame.font.Font('ipagp.ttf',70)
+    title_font = pygame.font.Font('ipagp.ttf',140)
+    usage_descript_font = pygame.font.Font('ipagp.ttf',23)
+    usage_descript_text = u'[操作方法] 移動:矢印キー(←↓↑→),発射:スペースキー,爆弾:Xキー,方向固定:Zキー'
+    viewusage_descript_text = u'[観戦モード] カメラ位置を矢印キー(←↓↑→)で移動できます'
+    
+    pagename_font = pygame.font.Font('ipagp.ttf', 100)
     tankname_font = pygame.font.Font('ipagp.ttf', 20)
     mystatus_font = pygame.font.Font('ipagp.ttf', 30)
     myhp_descript =  mystatus_font.render(' HP', True, (255,255,255))
     mybomb_descript =  mystatus_font.render('BOMB', True, (255,255,255))
     mydead_font = pygame.font.Font('ipagp.ttf', 65)
     mydead_surface = mydead_font.render('D E A D', True, (255,255,255))
+    dead_descript = pygame.font.Font('ipagp.ttf', 30).render(
+        u'死亡しました 結果発表を待たずに終了するにはQキー',True,(255,255,255),(78,78,78))
     waitmessage_font = pygame.font.Font('ipagp.ttf',40)
     waitsecs_font = pygame.font.Font('ipagp.ttf',200)
     countdown_font = pygame.font.Font('ipagp.ttf',500)
     start_font = pygame.font.Font('ipagp.ttf',300)
     ranking_font = pygame.font.Font('ipagp.ttf',20)
     
-    
     #テキストボックス
     input_entered = None
     textbox_width = 300
     textbox_height = 75
     btn_width = 900
-    btn_height = 100
+    btn_height = 90
     
     title_surface = title_font.render(u'GunTankOnline',True,(255,255,255))
-    top_guestbtn = Button(u'ゲストとして参戦', pygame.Rect(0,400,btn_width, btn_height))
+    top_guestbtn = Button(u'参戦する', pygame.Rect(0,screen_height-200,btn_width, btn_height))
     top_guestbtn.rect.centerx = screen.get_rect().centerx
-    top_loginbtn = Button(u'ログインして参戦', pygame.Rect(0,550,btn_width, btn_height))
-    top_loginbtn.rect.centerx = screen.get_rect().centerx
+    #top_loginbtn = Button(u'ログインして参戦', pygame.Rect(0,screen_height-200,btn_width, btn_height))
+    #top_loginbtn.rect.centerx = screen.get_rect().centerx
     login_loginbtn = Button(u'ログイン', pygame.Rect(0, 600, btn_width, btn_height))
     login_loginbtn.rect.centerx = screen.get_rect().centerx
     login_backbtn = Button(u'戻る', pygame.Rect(0, 600, btn_width, btn_height))
     login_backbtn.rect.left = screen.get_rect().left + 50
+    
+    topimg = pygame.image.load('imgs/gto.jpg').convert()
     
     quit = False
     state = 'init'
@@ -1149,25 +1163,33 @@ if __name__ == '__main__':
                             password = None
                             state = 'select'
                         #ログイン参戦クリック
-                        elif top_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                            textboxes = [
-                                TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
-                                TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
-                            state = 'login'
+                        #elif top_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                            #textboxes = [
+                                #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
+                                #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
+                            #state = 'login'
 
-                    screen.fill((0,0,0))
+                    screen.fill((115,115,115))
                     title_rect = title_surface.get_rect()
-                    title_rect.center = (screen_width/2, 50)
+                    title_rect.center = (screen_width/2, 80)
                     screen.blit(title_surface, title_rect)
+                    topimg_rect = topimg.get_rect()
+                    topimg_rect.center = screen.get_rect().center
+                    screen.blit(topimg, topimg_rect)
+                    usage_descript = usage_descript_font.render(usage_descript_text,True,(255,255,255))
+                    usage_descript_rect = usage_descript.get_rect()
+                    usage_descript_rect.centerx = screen.get_rect().centerx
+                    usage_descript_rect.y = screen_height - 25
+                    screen.blit(usage_descript, usage_descript_rect)
                     top_guestbtn.update(screen)
-                    top_loginbtn.update(screen)
+                    #top_loginbtn.update(screen)
                     
             elif state == 'login':
-                screen.fill((0,0,0))
+                screen.fill((115,115,115))
                 color = (255,255,255)
                 screen.blit(title_surface, title_rect)
                 page_name = u'ログイン'
-                page_surface = title_font.render(page_name, True, color)
+                page_surface = pagename_font.render(page_name, True, color)
                 screen.blit(page_surface, title_rect.midbottom)
                 
                 for event in pygame.event.get():
@@ -1221,15 +1243,22 @@ if __name__ == '__main__':
                         if login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
                             state = 'init'
 
-                screen.fill((0,0,0))
+                screen.fill((115,115,115))
                 color = (255,255,255)
                 screen.blit(title_surface, title_rect)
-                page_name = u'機体セレクト'
-                page_surface = title_font.render(page_name, True, color)
+                page_name = u'機体選択'
+                page_surface = pagename_font.render(page_name, True, color)
                 screen.blit(page_surface, title_rect.midbottom)
                 [select_tank.update() for select_tank in select_tanks]
                 #戻るボタン
                 login_backbtn.update(screen)
+                
+                #操作説明
+                usage_descript_play = usage_descript_font.render(usage_descript_text,True,(255,255,255))
+                usage_descript_rect = usage_descript_play.get_rect()
+                usage_descript_rect.centerx = screen.get_rect().centerx
+                usage_descript_rect.y = screen_height - 25
+                screen.blit(usage_descript_play, usage_descript_rect)
 
             #参戦選択後の処理
             elif state == 'attend':
@@ -1248,11 +1277,11 @@ if __name__ == '__main__':
                 state = 'wait'
                     
             elif state == 'wait':
-                screen.fill((0,0,0))
+                screen.fill((115,115,115))
                 color = (255,255,255)
                 screen.blit(title_surface, title_rect)
                 page_name = u'マッチング中...'
-                page_surface = title_font.render(page_name, True, color)
+                page_surface = pagename_font.render(page_name, True, color)
                 screen.blit(page_surface, title_rect.midbottom)
                 #フリーズ防止
                 pygame.event.get()
@@ -1261,7 +1290,7 @@ if __name__ == '__main__':
                 if poll_secs <= 0:
                     #サーバから承認されて開始データが来るまで待機
                     data = json.loads(urllib2.urlopen('http://{}/check'.format(server_addr)).read())
-                    poll_secs = 3  #デフォルトを3sに
+                    poll_secs = 2  #デフォルトを3sに
                 else:
                     poll_secs -= passed_seconds
                     
@@ -1284,7 +1313,17 @@ if __name__ == '__main__':
                 waitmessage_surface = waitmessage_font.render(waitmessage, True, color)
                 screen.blit(waitmessage_surface, (screen_width/2-waitmessage_surface.get_width()/2,screen_height/2))
                 
+                usage_descript_play = usage_descript_font.render(usage_descript_text,True,(255,255,255))
+                usage_descript_rect = usage_descript_play.get_rect()
+                usage_descript_rect.centerx = screen.get_rect().centerx
+                usage_descript_rect.y = screen_height - 25
+                screen.blit(usage_descript_play, usage_descript_rect)
+                
+                
+                
             elif state == 'start':
+                #たまったキーイベントによる開始時の動作を防止
+                pygame.event.get()
                 data = json.loads(urllib2.urlopen('http://{}/start?battle_id={}'.format(server_addr, battle_id)).read())
                 maze = data[0]
                 players = data[1]
@@ -1328,7 +1367,7 @@ if __name__ == '__main__':
                 outer_wall_portrait = pygame.transform.rotate(outer_wall_landscape, 90)
                 adapter_image = pygame.image.load('./imgs/adapter.png').convert()
                 outer_adapter_image = pygame.image.load('./imgs/outer_adapter.png').convert()
-                ground_image = pygame.image.load('./imgs/ground.png').convert()
+                ground_image = pygame.image.load('./imgs/ground.jpg').convert()
                 outer_ground_image = pygame.image.load('./imgs/outer_ground.png').convert()
                 damagedwall_landscape = pygame.image.load('./imgs/damagedwall.png').convert()
                 damagedwall_portrait = pygame.transform.rotate(damagedwall_landscape, 90)
@@ -1339,9 +1378,6 @@ if __name__ == '__main__':
                 field_x, field_y = make_field(maze, maze_x, maze_y)
                 make_ground(maze_x, maze_y)
                 
-                #たまったキーイベントによる開始時の動作を防止
-                pygame.event.get()
-
                 #アドレスリスト作成
                 addresses = list()
                 for enemy in enemy_list:
@@ -1353,32 +1389,38 @@ if __name__ == '__main__':
                 end_countdown = start_time + 5
                 block = True
                 countdown = True
+                battle_start = False
                 finish_screen = False
                 viewer = False
+                finish_viewer = False
 
-                #初期位置設定
-                while True:
-                    #ランダムな位置をゲット
-                    start_x, start_y = init_place(field_y, field_y, wall_width)
-                    start_x -= screen_width/2
-                    start_y -= screen_height/2
-                    #start_x,yを反映
-                    mytank.relative_x = start_x
-                    mytank.relative_y = start_y
-                    tanks.update(mytank.relative_x, mytank.relative_y, countdown)
-                    walls.update(mytank.relative_x, mytank.relative_y)
-                    #接触していない場合はループから離脱
-                    if not pygame.sprite.spritecollideany(mytank, walls):
-                        break
+                try:
+                    #初期位置設定
+                    while True:
+                        #ランダムな位置をゲット
+                        start_x, start_y = init_place(field_y, field_y, wall_width)
+                        start_x -= screen_width/2
+                        start_y -= screen_height/2
+                        #start_x,yを反映
+                        mytank.relative_x = start_x
+                        mytank.relative_y = start_y
+                        tanks.update(mytank.relative_x, mytank.relative_y, countdown)
+                        walls.update(mytank.relative_x, mytank.relative_y)
+                        #接触していない場合はループから離脱
+                        if not pygame.sprite.spritecollideany(mytank, walls):
+                            break
 
-                #初期位置送信
-                send_queue.put({
-                        'addresses':addresses,
-                        'session_id':mysession_id,
-                        'type':'move',
-                        'x':mytank.x,
-                        'y':mytank.y,
-                        'way':mytank.way})    
+                    #初期位置送信
+                    send_queue.put({
+                            'addresses':addresses,
+                            'session_id':mysession_id,
+                            'type':'move',
+                            'x':mytank.x,
+                            'y':mytank.y,
+                            'way':mytank.way})
+                #mytankがなぜかNot definedになることがまれにあるので
+                except NameError:
+                    state = 'init'
                     
                 print('Start')
                 state = 'play'
@@ -1397,6 +1439,15 @@ if __name__ == '__main__':
                         mytank.relative_x -= viewer_speed * passed_seconds
                     elif pressed_keys[K_RIGHT] or pressed_keys[K_d]:
                         mytank.relative_x += viewer_speed * passed_seconds
+                    
+                    #終了
+                    if pressed_keys[K_q]:
+                        finish_viewer = True
+                
+                #強制切断
+                if pressed_keys[K_d] and pygame.key.get_mods() & KMOD_CTRL:
+                    state = 'init'
+                
                     
                 #受信データを確認
                 while not receive_queue.empty():
@@ -1571,22 +1622,33 @@ if __name__ == '__main__':
                         mybomb_length = 0
                     screen.blit(mybombbar_img, (mystatus_x + 105, mystatus_y + 125),
                                 area=pygame.Rect(0, 0, mybomb_length, myhp_green_img.get_height()))
+                    
+                    #操作説明
+                    usage_descript_play = usage_descript_font.render(usage_descript_text,True,(255,255,255),(78,78,78))
                 else:
                     #自機死亡時にDEAD表示
                     mydead_rect = mydead_surface.get_rect()
                     mydead_rect.centerx = mystatus_rect.centerx
                     mydead_rect.y = mystatus_y + 90
                     screen.blit(mydead_surface, mydead_rect)
-                
+                    usage_descript_play = usage_descript_font.render(viewusage_descript_text,True,(255,255,255),(78,78,78))
+                    #死亡案内
+                    screen.blit(dead_descript, (10,10))
+                    
+                usage_descript_rect = usage_descript_play.get_rect()
+                usage_descript_rect.centerx = screen.get_rect().centerx
+                usage_descript_rect.y = screen_height - 25
+                screen.blit(usage_descript_play, usage_descript_rect)
+                    
                 #死亡時に自動的にビューアモードに遷移
                 if mytank.died:
                     viewer = True
                 
                 #開始カウントダウン
                 if countdown:
-                    count_sec =  str(int(end_countdown - nowtime()))
-                    if count_sec == '0':
-                        count_sec = 'START'
+                    count_sec = int(end_countdown - nowtime())
+                    if count_sec <= 0:
+                        battle_start = True
                         battle_starttime = nowtime()
                         #接続失敗ノードの切り離し
                         for enemy_data in enemy_list:
@@ -1602,15 +1664,16 @@ if __name__ == '__main__':
                     s = pygame.Surface((screen_width, screen_height), SRCALPHA)
                     s.fill((255,255,255,128))
                     screen.blit(s, (0,0))
-                    if count_sec == 'START':
-                        count_sec_surface = start_font.render(count_sec, True, (255,255,255))
+                    if battle_start:
+                        count_sec_surface = start_font.render('START', True, (255,255,255))
                     else:
-                        count_sec_surface = countdown_font.render(count_sec, True, (255,255,255))
+                        count_sec_surface = countdown_font.render(str(count_sec), True, (255,255,255))
                     screen.blit(count_sec_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                                     screen_height/2-count_sec_surface.get_height()/2))
                     
                 #自機を含めて誰か一人だけになったか終了時刻の場合は終了
-                if not countdown and (died_list.count(False)<=1 or battle_starttime+battle_duration <= nowtime()):
+                if not countdown and (died_list.count(False)<=1 or battle_starttime+battle_duration <= nowtime()) \
+                    or finish_viewer:
                     if not finish_screen:
                         block = True
                         s = pygame.Surface((screen_width, screen_height), SRCALPHA)
@@ -1618,49 +1681,72 @@ if __name__ == '__main__':
                         finish_surface = start_font.render('FINISH', True, (255,255,255))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                     screen_height/2-count_sec_surface.get_height()/2))
-                        end_display_finish = nowtime() + 5
+                        end_display_finish = nowtime() + 4
                         screen.blit(s, (0,0))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                     screen_height/2-count_sec_surface.get_height()/2))
                         #スコアアップロード
                         if not mytank.died:
-                            mytank.deadtime = 2147483647 #max
-                        urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}&deadtime={}'.format(
-                            server_addr, battle_id, mysession_id, score, mytank.deadtime))
+                            mytank.deadtime = nowtime() #max
+                        alivetime = int(mytank.deadtime - start_time)
+                            
+                        urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}&alivetime={}'.format(
+                            server_addr, battle_id, mysession_id, score, alivetime))
                         finish_screen = True
+                        
+                    elif finish_viewer:
+                        state = 'init'
                         
                     else:
                         screen.blit(s, (0,0))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
                                     screen_height/2-count_sec_surface.get_height()/2))
                         if nowtime() > end_display_finish:
+                            end_time = nowtime()
                             print('Finished')
                             data = json.loads(urllib2.urlopen('http://{}/ranking?battle_id={}'.format(
                                                 server_addr, battle_id)).read())
+                            #ボーナス
+                            for i,session in enumerate(data):
+                                if not session['score']==-1:
+                                    #生存時間ボーナス
+                                    alivebonus_ratio = session['alivetime'] / (end_time - start_time)
+                                    alivebonus = int(alivebonus_ratio * 200)
+                                    #最終生存ボーナス
+                                    if not session['alivetime'] > end_time - start_time:
+                                        alivebonus += 250
+                                    data[i]['score'] += alivebonus
+                        
                             sorted_session = sorted(data, key=lambda session: session['score'], reverse=True)
-                            exitbtn = Button(u'終了', pygame.Rect(0,550,btn_width, btn_height))
+                            exitbtn = Button(u'終了', pygame.Rect(0,screen_height-200,btn_width, btn_height))
                             exitbtn.rect.centerx = screen.get_rect().centerx
+                            result_close = nowtime() + 30
                             state = 'result'
                     
                     
             elif state=='result':
-                screen.fill((0,0,0))
-                color = (255,255,255)
+                screen.fill((115,115,115))
+                white = (255,255,255)
+                red = (179,31,31)
                 screen.blit(title_surface, title_rect)
-                page_name = u'リザルト'
-                page_surface = title_font.render(page_name, True, color)
+                page_name = u'結果発表'
+                page_surface = pagename_font.render(page_name, True, color)
                 screen.blit(page_surface, title_rect.midbottom)
                 
                 current_x = 50
                 current_y = 200
                 for i,session in enumerate(sorted_session):
                     if not session['score']==-1:
-                        rank_text = u'第{}位:  {}  {}points'.format(i+1,session['name'],session['score'])
+                        rank_text = u'第{}位:  {}  {}points  生存時間{}秒'.format(
+                            i+1,session['name'],session['score'],int(session['alivetime']))
                     else:
                         rank_text = u'第{}位:  {}  DISCONNECTED'.format(i+1,session['name'])
-                    rank_surface = ranking_font.render(rank_text, True, color)
+                    if session['session_id'] == mysession_id:
+                        rank_surface = ranking_font.render(rank_text, True, red)
+                    else:
+                        rank_surface = ranking_font.render(rank_text, True, white)
                     screen.blit(rank_surface, (current_x, current_y))
-                    current_y += 30
+                    current_y += 20
                     
                 for event in pygame.event.get():
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1669,6 +1755,9 @@ if __name__ == '__main__':
                             state = 'init'
                 
                 exitbtn.update(screen)
+                
+                if result_close < nowtime():
+                    state = 'init'
                     
             pygame.display.update()
             clock.tick(30)

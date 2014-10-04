@@ -11,7 +11,6 @@ import time
 import datetime
 import json
 import random
-from maze_generator import Maze
 
 db_name = 'db.dat'
 userdb_name = 'userdb.dat'
@@ -28,53 +27,53 @@ for i in range(20):
 
 tank_dataset = [
     {
-    'tank_speed':400.0,
+    'tank_speed':500.0,
     'bullet_speed':900.0,
     'bullet_damage':20,
     'hp':600,
-    'bullet_per_sec':4,
-    'accel_ratio':300,
+    'bullet_per_sec':3,
+    'accel_ratio':250,
     'brake_ratio':0.7},
     {
-    'tank_speed':200.0,
+    'tank_speed':300.0,
     'bullet_speed':900.0,
+    'bullet_damage':25,
+    'hp':700,
+    'bullet_per_sec':3,
+    'accel_ratio':150,
+    'brake_ratio':0.5},
+    {
+    'tank_speed':400.0,
+    'bullet_speed':1600.0,
     'bullet_damage':40,
-    'hp':800,
-    'bullet_per_sec':2,
+    'hp':400,
+    'bullet_per_sec':1,
     'accel_ratio':200,
-    'brake_ratio':0.7},
+    'brake_ratio':0.5},
     {
-    'tank_speed':600.0,
+    'tank_speed':450.0,
     'bullet_speed':900.0,
     'bullet_damage':15,
-    'hp':400,
-    'bullet_per_sec':6,
-    'accel_ratio':300,
-    'brake_ratio':0.7},
+    'hp':350,
+    'bullet_per_sec':10,
+    'accel_ratio':500,
+    'brake_ratio':0.9},
+    {
+    'tank_speed':750.0,
+    'bullet_speed':900.0,
+    'bullet_damage':10,
+    'hp':450,
+    'bullet_per_sec':4,
+    'accel_ratio':700,
+    'brake_ratio':0.5},
     {
     'tank_speed':600.0,
-    'bullet_speed':900.0,
-    'bullet_damage':15,
-    'hp':400,
-    'bullet_per_sec':6,
-    'accel_ratio':300,
-    'brake_ratio':0.7},
-    {
-    'tank_speed':600.0,
-    'bullet_speed':900.0,
-    'bullet_damage':15,
-    'hp':400,
-    'bullet_per_sec':6,
-    'accel_ratio':300,
-    'brake_ratio':0.7},
-    {
-    'tank_speed':600.0,
-    'bullet_speed':900.0,
-    'bullet_damage':15,
-    'hp':400,
-    'bullet_per_sec':6,
-    'accel_ratio':300,
-    'brake_ratio':0.7}]
+    'bullet_speed':450.0,
+    'bullet_damage':25,
+    'hp':600,
+    'bullet_per_sec':1,
+    'accel_ratio':600,
+    'brake_ratio':0.4}]
     
     
 def get_db():
@@ -160,6 +159,9 @@ def attend():
         db['battle_id'] = random.randint(1,99999999)
         db['start_time'] = 2147483647   #max unixtime
         db['waitlist'] = list()
+        db['battles'] += 1
+        
+    db['connection'] +=1
     
     #未アップロードのscoreは-1
     db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id,
@@ -205,15 +207,16 @@ def score():
     battle_id = request.args['battle_id']
     session_id = int(request.args['session_id'])
     score = int(request.args['score'])
-    deadtime = float(request.args['deadtime'])
+    alivetime = float(request.args['alivetime'])
     db = get_db()
+    userid = None
     for i,session in  enumerate(db['battlelist'][battle_id][1]):
         if session['session_id'] == session_id:
             db['battlelist'][battle_id][1][i]['score'] = score
-            db['battlelist'][battle_id][1][i]['deadtime'] = deadtime
+            db['battlelist'][battle_id][1][i]['alivetime'] = alivetime
             userid = db['battlelist'][battle_id][1][i]['id']
     set_db(db)
-    
+
     #ユーザの時はスコアを記録
     if userid is not None:
         users = get_userdb()
