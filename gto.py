@@ -1,7 +1,5 @@
 #coding:utf-8
 
-#NOTICE: REMOVE TEST BEFORE LAUNCH
-
 import pygame
 pygame.init()
 from pygame.locals import *
@@ -15,6 +13,9 @@ from textbox import TextBox, Button
 import pyganim
 from math import ceil #切り上げ
 import getpass
+
+#起動パスコード
+start_password = 13928
 
 
 class Tank(pygame.sprite.Sprite):
@@ -80,6 +81,21 @@ class Tank(pygame.sprite.Sprite):
         if not self.died and self.hp <= 0:
             self.deadtime = nowtime()
         self.died = self.hp <= 0
+        
+        #死亡時のグラ入れ替え
+        if self.died:
+            self.origin_image = pygame.image.load(diedtank_id_file[self.tank_id]).convert_alpha()
+            if self.way == 'up':
+                self.up_image = pygame.transform.rotate(self.origin_image, 270)
+                self.image = self.up_image
+            elif self.way == 'down':
+                self.down_image = pygame.transform.rotate(self.origin_image, 90)
+                self.image = self.down_image
+            elif self.way == 'left':
+                self.image = self.origin_image
+            elif self.way == 'right':
+                self.right_image = pygame.transform.rotate(self.origin_image, 180)
+                self.image = self.right_image
 
         if self.center:
             passed_seconds = self.clock.tick()/1000.0
@@ -243,20 +259,6 @@ class Tank(pygame.sprite.Sprite):
         self.died = self.hp <= 0
         if self.center:
             self.hp -= bullet_damage
-        #死亡時のグラ入れ替え
-        if self.died:
-            self.origin_image = pygame.image.load(diedtank_id_file[tank_id]).convert_alpha()
-            if self.way == 'up':
-                self.up_image = pygame.transform.rotate(self.origin_image, 270)
-                self.image = self.up_image
-            elif self.way == 'down':
-                self.down_image = pygame.transform.rotate(self.origin_image, 90)
-                self.image = self.down_image
-            elif self.way == 'left':
-                self.image = self.origin_image
-            elif self.way == 'right':
-                self.right_image = pygame.transform.rotate(self.origin_image, 180)
-                self.image = self.right_image
                 
     def bombed(self, explode_time=None, bullet_id=None):
         if self.center:
@@ -966,17 +968,15 @@ def place_select_tank(tank_types, num_tank_row, tank_dataset):
         
 
 if __name__ == '__main__':
-    #debug
-    input_txt = raw_input('localhost?(y)> ')
-    if input_txt == 'y':
+    #デバッグか確認
+    if raw_input('localhost?(y)> ') == 'y':
         debug = True
         server_addr = '127.0.0.1:5000'
         receive_port = int(raw_input('RECV PORT> '))
     else:
         print(u'トラブル発生の原因となるので、部員以外の起動を禁じます')
-        print(u'インターネットオプションの変更,実行ディレクトリが配布提出でないことを確認すること')
-        start_password = getpass.getpass()
-        if not start_password == '19238':
+        print(u'重要:インターネットオプションの変更,実行ディレクトリが配布提出でないことを確認すること')
+        if not getpass.getpass() == start_password:
             exit()
         server_addr = '192.168.1.207:5000'
         debug = False
@@ -1148,6 +1148,7 @@ if __name__ == '__main__':
                 fired_bullet_list = list()
                 bombed_list = list()
                 
+                #機体パラメータ取得
                 tank_dataset = json.loads(urllib2.urlopen('http://{}/tankdata'.format(server_addr)).read())
                 
                 state = 'title'
@@ -1184,52 +1185,52 @@ if __name__ == '__main__':
                     top_guestbtn.update(screen)
                     #top_loginbtn.update(screen)
                     
-            elif state == 'login':
-                screen.fill((115,115,115))
-                color = (255,255,255)
-                screen.blit(title_surface, title_rect)
-                page_name = u'ログイン'
-                page_surface = pagename_font.render(page_name, True, color)
-                screen.blit(page_surface, title_rect.midbottom)
+            #elif state == 'login':
+                #screen.fill((115,115,115))
+                #color = (255,255,255)
+                #screen.blit(title_surface, title_rect)
+                #page_name = u'ログイン'
+                #page_surface = pagename_font.render(page_name, True, color)
+                #screen.blit(page_surface, title_rect.midbottom)
                 
-                for event in pygame.event.get():
-                    if event.type == pygame.KEYDOWN:
-                        for box in textboxes:
-                            if box.selected:
-                                input_entered = box.char_add(event)
-                    elif event.type == pygame.MOUSEBUTTONDOWN:
-                        if event.button == 1 and state=='login':
-                            for box in textboxes:
-                                if box.rect.collidepoint(pygame.mouse.get_pos()):
-                                    box.selected = True
-                                else:
-                                    box.selected = False
-                                if login_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                                    id_input = textboxes[0].string
-                                    pass_input = textboxes[1].string
-                                    if id_input and pass_input:
-                                        user_id = id_input
-                                        password = pass_input
-                                        state = 'auth'
-                                        select_tanks = place_select_tank(6, 3, tank_dataset)
+                #for event in pygame.event.get():
+                    #if event.type == pygame.KEYDOWN:
+                        #for box in textboxes:
+                            #if box.selected:
+                                #input_entered = box.char_add(event)
+                    #elif event.type == pygame.MOUSEBUTTONDOWN:
+                        #if event.button == 1 and state=='login':
+                            #for box in textboxes:
+                                #if box.rect.collidepoint(pygame.mouse.get_pos()):
+                                    #box.selected = True
+                                #else:
+                                    #box.selected = False
+                                #if login_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                                    #id_input = textboxes[0].string
+                                    #pass_input = textboxes[1].string
+                                    #if id_input and pass_input:
+                                        #user_id = id_input
+                                        #password = pass_input
+                                        #state = 'auth'
+                                        #select_tanks = place_select_tank(6, 3, tank_dataset)
                                         
-                                elif login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                                    state = 'init'
+                                #elif login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                                    #state = 'init'
                                         
-                for box in textboxes:
-                    box.update(screen)
-                login_loginbtn.update(screen)
-                login_backbtn.update(screen)
+                #for box in textboxes:
+                    #box.update(screen)
+                #login_loginbtn.update(screen)
+                #login_backbtn.update(screen)
                 
-            elif state == 'auth':
-                data = json.loads(urllib2.urlopen(
-                                'http://{}/user?id={}&pass={}'.format(server_addr,user_id,password)).read())
-                if data['auth'] == False:
-                    print('Auth fail')
-                    state = 'init'
-                else:
-                    print('score: {}'.format(data['userdat'][1]))
-                    state = 'select'
+            #elif state == 'auth':
+                #data = json.loads(urllib2.urlopen(
+                                #'http://{}/user?id={}&pass={}'.format(server_addr,user_id,password)).read())
+                #if data['auth'] == False:
+                    #print('Auth fail')
+                    #state = 'init'
+                #else:
+                    #print('score: {}'.format(data['userdat'][1]))
+                    #state = 'select'
 
             #機体選択
             elif state == 'select':
@@ -1684,11 +1685,17 @@ if __name__ == '__main__':
                         end_display_finish = nowtime() + 4
                         screen.blit(s, (0,0))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
-                                    screen_height/2-count_sec_surface.get_height()/2))
-                        #スコアアップロード
-                        if not mytank.died:
-                            mytank.deadtime = nowtime() #max
-                        alivetime = int(mytank.deadtime - start_time)
+                        
+                        screen_height/2-count_sec_surface.get_height()/2))
+                        
+                        try:
+                            #スコアアップロード
+                            if not mytank.died:
+                                mytank.deadtime = nowtime() #max
+                            alivetime = int(mytank.deadtime - start_time)
+                        
+                        except AttributeError:
+                            alivetime = int(nowtime() - start_time)
                             
                         urllib2.urlopen('http://{}/score?battle_id={}&session_id={}&score={}&alivetime={}'.format(
                             server_addr, battle_id, mysession_id, score, alivetime))
@@ -1723,7 +1730,7 @@ if __name__ == '__main__':
                             result_close = nowtime() + 30
                             state = 'result'
                     
-                    
+            #結果表示画面
             elif state=='result':
                 screen.fill((115,115,115))
                 white = (255,255,255)

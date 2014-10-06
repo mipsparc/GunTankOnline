@@ -180,7 +180,7 @@ def check():
     if not db['wait_for_start'] and waiting >= 2:
         db['wait_for_start'] = True
         #開始時刻設定
-        db['start_time'] = time.time() + 10
+        db['start_time'] = time.time() + 30
         
         set_db(db)
 
