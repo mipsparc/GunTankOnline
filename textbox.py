@@ -5,7 +5,7 @@ class TextBox(object):
     def __init__(self, rect, width=1):
         self.selected = False
         self.font_size = 60
-        self.font = pygame.font.Font('ipagp.ttf',self.font_size)
+        self.font = pygame.font.Font('PixelMplus12.ttf',self.font_size)
         self.str_list = []
         self.width = width
         self.color = (255,255,255)
@@ -53,15 +53,15 @@ class Button(object):
     def __init__(self, text, rect):
         self.text = text
         self.is_hover = False
-        self.default_color = (147,184,202)
-        self.hover_color = (176,194,202)
+        self.default_color = (0,198,198)
+        self.hover_color = (131,198,198)
         self.font_color = (255,255,255)
         rect.width = self.label().get_width()+30
         self.rect = rect
        
     def label(self):
         '''button label font'''
-        font = pygame.font.Font('ipagp.ttf', 70)
+        font = pygame.font.Font('PixelMplus12.ttf', 70)
         return font.render(self.text, True, self.font_color)
        
     def color(self):

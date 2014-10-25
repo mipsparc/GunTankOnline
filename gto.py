@@ -676,13 +676,12 @@ class Explode(pygame.sprite.Sprite):
         
         if size == 'small':
             anim_imgs = smallexplode_anim_imgs
-            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
         elif size=='big':
             anim_imgs = explode_anim_imgs
-            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
         elif size == 'bomb':
             anim_imgs = bombexplodeanim_imgs
-            self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
+            
+        self.explode_anim = pyganim.PygAnimation([(img, 0.03) for img in anim_imgs], loop=False)
             
         self.image = anim_imgs[0]
         self.rect = anim_imgs[0].get_rect()
@@ -920,28 +919,37 @@ def nowtime():
     return time.time() + time_offset
 
 class TankSelect(object):
-    def __init__(self, x, y, image, speed, hp, attack, accel):
-        self.image = pygame.image.load(image).convert_alpha()
+    def __init__(self, x, y, current_tank_id, speed, hp, attack, accel):
+        self.default_image = pygame.image.load(tank_id_file[current_tank_id]).convert_alpha()
+        self.hover_image = pygame.image.load(diedtank_id_file[current_tank_id]).convert_alpha()
+        self.image = self.default_image
         self.rect = self.image.get_rect()
         self.rect.centerx = x
         self.rect.y = y
         #説明テキスト用
         color = (255, 255, 255)
-        font = pygame.font.Font('ipagp.ttf', 20)
+        font = pygame.font.Font('PixelMplus12.ttf', 20)
         self.label_init_x = self.rect.topright[0] + 10
         self.label_init_y = self.rect.topright[1]
         self.hp_label = font.render(u'HP: {}'.format(hp), True, color)
-        self.speed_label = font.render(u'最高速度: {}'.format(speed), True, color)
-        self.attack_label = font.render(u'攻撃力: {}'.format(attack), True, color)
-        self.accel_label = font.render(u'加速力: {}'.format(accel), True, color)
-        
+        self.attack_label = font.render(u'こうげき: {}'.format(attack), True, color)
+        self.speed_label = font.render(u'はやさ: {}'.format(speed), True, color)
+        self.accel_label = font.render(u'かそく: {}'.format(accel), True, color)
+
+        #マウスオーバーされているか
+        self.is_hover = False
         
     def update(self):
+        #マウスオーバー時の画像に差し替え
+        if self.is_hover:
+            self.image = self.hover_image
+        else:
+            self.image = self.default_image
         screen.blit(self.image, self.rect)
         #tank情報表示
         screen.blit(self.hp_label, (self.label_init_x,self.label_init_y))
-        screen.blit(self.speed_label, (self.label_init_x,self.label_init_y+25))
-        screen.blit(self.attack_label, (self.label_init_x,self.label_init_y+50))
+        screen.blit(self.attack_label, (self.label_init_x,self.label_init_y+25))
+        screen.blit(self.speed_label, (self.label_init_x,self.label_init_y+50))
         screen.blit(self.accel_label, (self.label_init_x,self.label_init_y+75))
 
 
@@ -954,13 +962,12 @@ def place_select_tank(tank_types, num_tank_row, tank_dataset):
     for i in range(tank_types/num_tank_row):
         for n in range(num_tank_row):
             current_x = (n+1)*x_step
-            image = tank_id_file[current_tank_id]
             tank_data = tank_dataset[current_tank_id]
             speed = int(tank_data['tank_speed'])
             hp = tank_data['hp']
             attack = tank_data['bullet_damage']
             accel = tank_data['accel_ratio']
-            select_tanks.append(TankSelect(current_x, current_y, image, speed, hp, attack, accel))
+            select_tanks.append(TankSelect(current_x, current_y, current_tank_id, speed, hp, attack, accel))
             current_tank_id += 1
         current_y += 200
         
@@ -1065,25 +1072,25 @@ if __name__ == '__main__':
     send_process.start()
     receive_process.start()
     
-    title_font = pygame.font.Font('ipagp.ttf',140)
-    usage_descript_font = pygame.font.Font('ipagp.ttf',23)
-    usage_descript_text = u'[操作方法] 移動:矢印キー(←↓↑→),発射:スペースキー,爆弾:Xキー,方向固定:Zキー'
+    title_font = pygame.font.Font('LCD5x7_Regular.otf',120)
+    usage_descript_font = pygame.font.Font('PixelMplus12.ttf',23)
+    usage_descript_text = u'[操作方法] 移動:矢印キー(←↓↑→),発射:スペースキー,爆弾:Xキー'
     viewusage_descript_text = u'[観戦モード] カメラ位置を矢印キー(←↓↑→)で移動できます'
     
-    pagename_font = pygame.font.Font('ipagp.ttf', 100)
-    tankname_font = pygame.font.Font('ipagp.ttf', 20)
-    mystatus_font = pygame.font.Font('ipagp.ttf', 30)
+    pagename_font = pygame.font.Font('PixelMplus12.ttf', 100)
+    tankname_font = pygame.font.Font('LCD5x7_Regular.otf', 20)
+    mystatus_font = pygame.font.Font('LCD5x7_Regular.otf', 30)
     myhp_descript =  mystatus_font.render(' HP', True, (255,255,255))
     mybomb_descript =  mystatus_font.render('BOMB', True, (255,255,255))
-    mydead_font = pygame.font.Font('ipagp.ttf', 65)
+    mydead_font = pygame.font.Font('LCD5x7_Regular.otf', 65)
     mydead_surface = mydead_font.render('D E A D', True, (255,255,255))
-    dead_descript = pygame.font.Font('ipagp.ttf', 30).render(
-        u'死亡しました 結果発表を待たずに終了するにはQキー',True,(255,255,255),(78,78,78))
-    waitmessage_font = pygame.font.Font('ipagp.ttf',40)
-    waitsecs_font = pygame.font.Font('ipagp.ttf',200)
-    countdown_font = pygame.font.Font('ipagp.ttf',500)
-    start_font = pygame.font.Font('ipagp.ttf',300)
-    ranking_font = pygame.font.Font('ipagp.ttf',20)
+    dead_descript = pygame.font.Font('PixelMplus12.ttf', 30).render(
+        u'死亡しました 結果発表を待たずに終了するにはQキー',True,(255,255,255),(48,48,48))
+    waitmessage_font = pygame.font.Font('PixelMplus12.ttf',30)
+    waitsecs_font = pygame.font.Font('LCD5x7_Regular.otf',200)
+    countdown_font = pygame.font.Font('LCD5x7_Regular.otf',500)
+    start_font = pygame.font.Font('LCD5x7_Regular.otf',200)
+    ranking_font = pygame.font.Font('PixelMplus12.ttf',20)
     
     #テキストボックス
     input_entered = None
@@ -1092,17 +1099,25 @@ if __name__ == '__main__':
     btn_width = 900
     btn_height = 90
     
-    title_surface = title_font.render(u'GunTankOnline',True,(255,255,255))
-    top_guestbtn = Button(u'参戦する', pygame.Rect(0,screen_height-200,btn_width, btn_height))
+    #タイトルロゴの横幅縮小
+    title_surface = title_font.render(u'GunTankOnline',True,(0,255,255))
+    title_surface = pygame.transform.scale(
+                        title_surface, (int(title_surface.get_width()*0.8), title_surface.get_height()))
+    title_rect = title_surface.get_rect()
+    title_rect.center = (screen_width/2, 120)
+    
+    top_guestbtn = Button(u'たたかう', pygame.Rect(0,screen_height-200,btn_width, btn_height))
     top_guestbtn.rect.centerx = screen.get_rect().centerx
     #top_loginbtn = Button(u'ログインして参戦', pygame.Rect(0,screen_height-200,btn_width, btn_height))
     #top_loginbtn.rect.centerx = screen.get_rect().centerx
     login_loginbtn = Button(u'ログイン', pygame.Rect(0, 600, btn_width, btn_height))
     login_loginbtn.rect.centerx = screen.get_rect().centerx
-    login_backbtn = Button(u'戻る', pygame.Rect(0, 600, btn_width, btn_height))
+    login_backbtn = Button(u'もどる', pygame.Rect(0, screen_height-120, btn_width, btn_height))
     login_backbtn.rect.left = screen.get_rect().left + 50
     
     topimg = pygame.image.load('imgs/gto.jpg').convert()
+    loadinganim_imgs = [pygame.image.load('./imgs/loading/{}.gif'.format(n)).convert_alpha() for n in range(20)]
+    loading_anim = pyganim.PygAnimation([(img, 0.07) for img in loadinganim_imgs], loop=True)
     
     quit = False
     state = 'init'
@@ -1170,9 +1185,7 @@ if __name__ == '__main__':
                                 #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
                             #state = 'login'
 
-                    screen.fill((115,115,115))
-                    title_rect = title_surface.get_rect()
-                    title_rect.center = (screen_width/2, 80)
+                    screen.fill((22,22,22))
                     screen.blit(title_surface, title_rect)
                     topimg_rect = topimg.get_rect()
                     topimg_rect.center = screen.get_rect().center
@@ -1244,8 +1257,15 @@ if __name__ == '__main__':
                         if login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
                             state = 'init'
 
-                screen.fill((115,115,115))
-                color = (255,255,255)
+                #マウスオーバー時色薄く
+                for i,select_tank in enumerate(select_tanks):
+                    if select_tank.rect.collidepoint(pygame.mouse.get_pos()):
+                        select_tanks[i].is_hover = True
+                    else:
+                        select_tanks[i].is_hover = False
+                
+                screen.fill((22,22,22))
+                color = (0,255,255)
                 screen.blit(title_surface, title_rect)
                 page_name = u'機体選択'
                 page_surface = pagename_font.render(page_name, True, color)
@@ -1275,15 +1295,18 @@ if __name__ == '__main__':
                 myname = data['name']
                 #ポーリングで何秒待ってるか
                 poll_secs = 0
+                loading_anim.play()
                 state = 'wait'
                     
             elif state == 'wait':
-                screen.fill((115,115,115))
-                color = (255,255,255)
+                screen.fill((22,22,22))
+                color = (0,255,255)
                 screen.blit(title_surface, title_rect)
                 page_name = u'マッチング中...'
                 page_surface = pagename_font.render(page_name, True, color)
-                screen.blit(page_surface, title_rect.midbottom)
+                page_surface_rect = list(title_rect.midbottom)
+                page_surface_rect[0] -= 60
+                screen.blit(page_surface, page_surface_rect)
                 #フリーズ防止
                 pygame.event.get()
                     
@@ -1298,6 +1321,8 @@ if __name__ == '__main__':
                 if not data['start']:
                     waitmessage = u'対戦相手が見つかるまで、そのまま離れずにお待ちください'
                     wait_secs = None
+                    loading_anim.blit(screen, (screen_width/2-loadinganim_imgs[0].get_width()/2,
+                                               screen_height-loadinganim_imgs[0].get_height()-70))
                 else:
                     waitmessage = u'対戦相手が{}人見つかりました。開始までお待ちください'.format(data['waiting']-1)
                     start_time = data['start_time']
@@ -1663,7 +1688,7 @@ if __name__ == '__main__':
                         block = False
                         countdown = False
                     s = pygame.Surface((screen_width, screen_height), SRCALPHA)
-                    s.fill((255,255,255,128))
+                    s.fill((0,0,0,128))
                     screen.blit(s, (0,0))
                     if battle_start:
                         count_sec_surface = start_font.render('START', True, (255,255,255))
@@ -1680,8 +1705,8 @@ if __name__ == '__main__':
                         s = pygame.Surface((screen_width, screen_height), SRCALPHA)
                         s.fill((0,0,0,128))
                         finish_surface = start_font.render('FINISH', True, (255,255,255))
-                        screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
-                                    screen_height/2-count_sec_surface.get_height()/2))
+                        screen.blit(finish_surface, (screen_width/2-finish_surface.get_width()/2,
+                                    screen_height/2-finish_surface.get_height()/2))
                         end_display_finish = nowtime() + 4
                         screen.blit(s, (0,0))
                         screen.blit(finish_surface, (screen_width/2-count_sec_surface.get_width()/2,
@@ -1732,7 +1757,7 @@ if __name__ == '__main__':
                     
             #結果表示画面
             elif state=='result':
-                screen.fill((115,115,115))
+                screen.fill((22,22,22))
                 white = (255,255,255)
                 red = (179,31,31)
                 screen.blit(title_surface, title_rect)
