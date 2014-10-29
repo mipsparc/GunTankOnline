@@ -927,7 +927,7 @@ class TankSelect(object):
         self.rect.centerx = x
         self.rect.y = y
         #説明テキスト用
-        color = (255, 255, 255)
+        color = (0, 255, 255)
         font = pygame.font.Font('PixelMplus12.ttf', 20)
         self.label_init_x = self.rect.topright[0] + 10
         self.label_init_y = self.rect.topright[1]
@@ -1074,18 +1074,18 @@ if __name__ == '__main__':
     
     title_font = pygame.font.Font('LCD5x7_Regular.otf',120)
     usage_descript_font = pygame.font.Font('PixelMplus12.ttf',23)
-    usage_descript_text = u'[操作方法] 移動:矢印キー(←↓↑→),発射:スペースキー,爆弾:Xキー'
+    usage_descript_text = u'[操作方法] 移動:←↓↑→,主砲発射:スペース,爆弾設置:X'
     viewusage_descript_text = u'[観戦モード] カメラ位置を矢印キー(←↓↑→)で移動できます'
     
     pagename_font = pygame.font.Font('PixelMplus12.ttf', 100)
     tankname_font = pygame.font.Font('LCD5x7_Regular.otf', 20)
     mystatus_font = pygame.font.Font('LCD5x7_Regular.otf', 30)
-    myhp_descript =  mystatus_font.render(' HP', True, (255,255,255))
-    mybomb_descript =  mystatus_font.render('BOMB', True, (255,255,255))
+    myhp_descript =  mystatus_font.render(' HP', True, (251,166,0))
+    mybomb_descript =  mystatus_font.render('BOMB', True, (251,166,0))
     mydead_font = pygame.font.Font('LCD5x7_Regular.otf', 65)
-    mydead_surface = mydead_font.render('D E A D', True, (255,255,255))
+    mydead_surface = mydead_font.render('D E A D', True, (0,255,255))
     dead_descript = pygame.font.Font('PixelMplus12.ttf', 30).render(
-        u'死亡しました 結果発表を待たずに終了するにはQキー',True,(255,255,255),(48,48,48))
+        u'死亡しました 結果発表を待たずに終了するにはQキー',True,(0,255,255),(22,22,22))
     waitmessage_font = pygame.font.Font('PixelMplus12.ttf',30)
     waitsecs_font = pygame.font.Font('LCD5x7_Regular.otf',200)
     countdown_font = pygame.font.Font('LCD5x7_Regular.otf',500)
@@ -1190,7 +1190,7 @@ if __name__ == '__main__':
                     topimg_rect = topimg.get_rect()
                     topimg_rect.center = screen.get_rect().center
                     screen.blit(topimg, topimg_rect)
-                    usage_descript = usage_descript_font.render(usage_descript_text,True,(255,255,255))
+                    usage_descript = usage_descript_font.render(usage_descript_text,True,(0,255,255))
                     usage_descript_rect = usage_descript.get_rect()
                     usage_descript_rect.centerx = screen.get_rect().centerx
                     usage_descript_rect.y = screen_height - 25
@@ -1275,7 +1275,7 @@ if __name__ == '__main__':
                 login_backbtn.update(screen)
                 
                 #操作説明
-                usage_descript_play = usage_descript_font.render(usage_descript_text,True,(255,255,255))
+                usage_descript_play = usage_descript_font.render(usage_descript_text,True,(0,255,255))
                 usage_descript_rect = usage_descript_play.get_rect()
                 usage_descript_rect.centerx = screen.get_rect().centerx
                 usage_descript_rect.y = screen_height - 25
@@ -1339,7 +1339,7 @@ if __name__ == '__main__':
                 waitmessage_surface = waitmessage_font.render(waitmessage, True, color)
                 screen.blit(waitmessage_surface, (screen_width/2-waitmessage_surface.get_width()/2,screen_height/2))
                 
-                usage_descript_play = usage_descript_font.render(usage_descript_text,True,(255,255,255))
+                usage_descript_play = usage_descript_font.render(usage_descript_text,True,(0,255,255))
                 usage_descript_rect = usage_descript_play.get_rect()
                 usage_descript_rect.centerx = screen.get_rect().centerx
                 usage_descript_rect.y = screen_height - 25
@@ -1399,7 +1399,7 @@ if __name__ == '__main__':
                 damagedwall_portrait = pygame.transform.rotate(damagedwall_landscape, 90)
                 damagedadapter_image = pygame.image.load('./imgs/damagedadapter.png').convert()
                 
-                myname_descript = mystatus_font.render(myname, True, (255,255,255))
+                myname_descript = mystatus_font.render(myname, True, (0,255,255))
 
                 field_x, field_y = make_field(maze, maze_x, maze_y)
                 make_ground(maze_x, maze_y)
@@ -1569,7 +1569,7 @@ if __name__ == '__main__':
                     screen.blit(statusback_img, (status_x, status_y))
                     
                     #ユーザー名描画
-                    tankname_surface = tankname_font.render(tankname, True, (255, 255, 255))
+                    tankname_surface = tankname_font.render(tankname, True, (251, 166, 0))
                     screen.blit(tankname_surface, (status_x + 10, status_y + 5))
                     
                     #HPバー背景(削れたぶん)
@@ -1615,7 +1615,7 @@ if __name__ == '__main__':
                     resttime = int(battle_starttime+battle_duration-nowtime())
                     if resttime < 0:
                         resttime = 0
-                    secscore_surface = mystatus_font.render('{}points/{}sec'.format(score,resttime),True,(255,255,255))
+                    secscore_surface = mystatus_font.render('{}points/{}sec'.format(score,resttime),True,(251,166,0))
                     secscore_rect = secscore_surface.get_rect()
                     secscore_rect.right = mystatus_rect.right - 5
                     secscore_rect.top = mystatus_rect.top + 40
@@ -1650,14 +1650,14 @@ if __name__ == '__main__':
                                 area=pygame.Rect(0, 0, mybomb_length, myhp_green_img.get_height()))
                     
                     #操作説明
-                    usage_descript_play = usage_descript_font.render(usage_descript_text,True,(255,255,255),(78,78,78))
+                    usage_descript_play = usage_descript_font.render(usage_descript_text,True,(0,255,255),(22,22,22))
                 else:
                     #自機死亡時にDEAD表示
                     mydead_rect = mydead_surface.get_rect()
                     mydead_rect.centerx = mystatus_rect.centerx
                     mydead_rect.y = mystatus_y + 90
                     screen.blit(mydead_surface, mydead_rect)
-                    usage_descript_play = usage_descript_font.render(viewusage_descript_text,True,(255,255,255),(78,78,78))
+                    usage_descript_play = usage_descript_font.render(viewusage_descript_text,True,(0,255,255),(22,22,22))
                     #死亡案内
                     screen.blit(dead_descript, (10,10))
                     
@@ -1758,8 +1758,8 @@ if __name__ == '__main__':
             #結果表示画面
             elif state=='result':
                 screen.fill((22,22,22))
-                white = (255,255,255)
-                red = (179,31,31)
+                orange = (251, 166, 0)
+                blue = (0, 255, 255)
                 screen.blit(title_surface, title_rect)
                 page_name = u'結果発表'
                 page_surface = pagename_font.render(page_name, True, color)
@@ -1774,9 +1774,9 @@ if __name__ == '__main__':
                     else:
                         rank_text = u'第{}位:  {}  DISCONNECTED'.format(i+1,session['name'])
                     if session['session_id'] == mysession_id:
-                        rank_surface = ranking_font.render(rank_text, True, red)
+                        rank_surface = ranking_font.render(rank_text, True, orange)
                     else:
-                        rank_surface = ranking_font.render(rank_text, True, white)
+                        rank_surface = ranking_font.render(rank_text, True, blue)
                     screen.blit(rank_surface, (current_x, current_y))
                     current_y += 20
                     
