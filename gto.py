@@ -177,8 +177,8 @@ class Tank(pygame.sprite.Sprite):
                     if abs(self.y_speed) < 5:
                         self.y_speed = 0
 
-                x_diff = self.x_speed * passed_seconds
-                y_diff = self.y_speed * passed_seconds
+                x_diff = int(self.x_speed * passed_seconds)
+                y_diff = int(self.y_speed * passed_seconds)
             
                 #方向固定
                 if pressed_keys[K_z]:
@@ -981,20 +981,26 @@ if __name__ == '__main__':
         server_addr = '127.0.0.1:5000'
         receive_port = int(raw_input('RECV PORT> '))
     else:
-        print(u'トラブル発生の原因となるので、部員以外の起動を禁じます')
-        print(u'重要:インターネットオプションの変更,実行ディレクトリが配布提出でないことを確認すること')
-        if not getpass.getpass() == start_password:
-            exit()
-        server_addr = '192.168.1.207:5000'
+        #print(u'トラブル発生の原因となるので、部員以外の起動を禁じます')
+        #print(u'重要:インターネットオプションの変更,実行ディレクトリが配布提出でないことを確認すること')
+        #if not getpass.getpass() == start_password:
+        #    exit()
+        server_addr = '192.168.3.4:5000'
         debug = False
         receive_port = 8800
     
     if debug:
         screen_width = 1024
         screen_height = 768
+        #screen_width = int(raw_input('width: '))
+        #screen_height = int(raw_input('height: '))
+        pass
     else:
         screen_width = 1920
         screen_height = 1080
+        pass
+        
+        
     #tank_idに対応したファイル名
     tank_id_file = ('./imgs/0_tank.png','./imgs/1_tank.png','./imgs/2_tank.png','./imgs/3_tank.png',
                     './imgs/4_tank.png','./imgs/5_tank.png')
@@ -1010,7 +1016,8 @@ if __name__ == '__main__':
     if debug:
         screen = pygame.display.set_mode((screen_width, screen_height))
     else:
-        screen = pygame.display.set_mode((screen_width, screen_height), FULLSCREEN)
+        #screen = pygame.display.set_mode((screen_width, screen_height), FULLSCREEN)
+        screen = pygame.display.set_mode((screen_width, screen_height))
 
     pygame.display.set_caption('GTO -Gun Tank Online-')
     clock = pygame.time.Clock()
@@ -1108,12 +1115,8 @@ if __name__ == '__main__':
     
     top_guestbtn = Button(u'たたかう', pygame.Rect(0,screen_height-200,btn_width, btn_height))
     top_guestbtn.rect.centerx = screen.get_rect().centerx
-    #top_loginbtn = Button(u'ログインして参戦', pygame.Rect(0,screen_height-200,btn_width, btn_height))
-    #top_loginbtn.rect.centerx = screen.get_rect().centerx
-    login_loginbtn = Button(u'ログイン', pygame.Rect(0, 600, btn_width, btn_height))
-    login_loginbtn.rect.centerx = screen.get_rect().centerx
-    login_backbtn = Button(u'もどる', pygame.Rect(0, screen_height-120, btn_width, btn_height))
-    login_backbtn.rect.left = screen.get_rect().left + 50
+    backbtn = Button(u'もどる', pygame.Rect(0, screen_height-120, btn_width, btn_height))
+    backbtn.rect.left = screen.get_rect().left + 50
     
     topimg = pygame.image.load('imgs/gto.jpg').convert()
     loadinganim_imgs = [pygame.image.load('./imgs/loading/{}.gif'.format(n)).convert_alpha() for n in range(20)]
@@ -1175,15 +1178,7 @@ if __name__ == '__main__':
                         #ゲスト参戦クリック
                         if top_guestbtn.rect.collidepoint(pygame.mouse.get_pos()):
                             select_tanks = place_select_tank(6, 3, tank_dataset)
-                            user_id = None
-                            password = None
                             state = 'select'
-                        #ログイン参戦クリック
-                        #elif top_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                            #textboxes = [
-                                #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200,300,75),1),
-                                #TextBox(pygame.Rect(screen_width/2-textbox_width/2,screen_width/2-200+textbox_height*2,300,75),1)]
-                            #state = 'login'
 
                     screen.fill((22,22,22))
                     screen.blit(title_surface, title_rect)
@@ -1196,54 +1191,8 @@ if __name__ == '__main__':
                     usage_descript_rect.y = screen_height - 25
                     screen.blit(usage_descript, usage_descript_rect)
                     top_guestbtn.update(screen)
-                    #top_loginbtn.update(screen)
                     
-            #elif state == 'login':
-                #screen.fill((115,115,115))
-                #color = (255,255,255)
-                #screen.blit(title_surface, title_rect)
-                #page_name = u'ログイン'
-                #page_surface = pagename_font.render(page_name, True, color)
-                #screen.blit(page_surface, title_rect.midbottom)
-                
-                #for event in pygame.event.get():
-                    #if event.type == pygame.KEYDOWN:
-                        #for box in textboxes:
-                            #if box.selected:
-                                #input_entered = box.char_add(event)
-                    #elif event.type == pygame.MOUSEBUTTONDOWN:
-                        #if event.button == 1 and state=='login':
-                            #for box in textboxes:
-                                #if box.rect.collidepoint(pygame.mouse.get_pos()):
-                                    #box.selected = True
-                                #else:
-                                    #box.selected = False
-                                #if login_loginbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                                    #id_input = textboxes[0].string
-                                    #pass_input = textboxes[1].string
-                                    #if id_input and pass_input:
-                                        #user_id = id_input
-                                        #password = pass_input
-                                        #state = 'auth'
-                                        #select_tanks = place_select_tank(6, 3, tank_dataset)
-                                        
-                                #elif login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
-                                    #state = 'init'
-                                        
-                #for box in textboxes:
-                    #box.update(screen)
-                #login_loginbtn.update(screen)
-                #login_backbtn.update(screen)
-                
-            #elif state == 'auth':
-                #data = json.loads(urllib2.urlopen(
-                                #'http://{}/user?id={}&pass={}'.format(server_addr,user_id,password)).read())
-                #if data['auth'] == False:
-                    #print('Auth fail')
-                    #state = 'init'
-                #else:
-                    #print('score: {}'.format(data['userdat'][1]))
-                    #state = 'select'
+
 
             #機体選択
             elif state == 'select':
@@ -1254,7 +1203,7 @@ if __name__ == '__main__':
                             if select_tank.rect.collidepoint(pygame.mouse.get_pos()):
                                 mytank_id = i
                                 state = 'attend'
-                        if login_backbtn.rect.collidepoint(pygame.mouse.get_pos()):
+                        if backbtn.rect.collidepoint(pygame.mouse.get_pos()):
                             state = 'init'
 
                 #マウスオーバー時色薄く
@@ -1272,7 +1221,7 @@ if __name__ == '__main__':
                 screen.blit(page_surface, title_rect.midbottom)
                 [select_tank.update() for select_tank in select_tanks]
                 #戻るボタン
-                login_backbtn.update(screen)
+                backbtn.update(screen)
                 
                 #操作説明
                 usage_descript_play = usage_descript_font.render(usage_descript_text,True,(0,255,255))
@@ -1284,10 +1233,7 @@ if __name__ == '__main__':
             #参戦選択後の処理
             elif state == 'attend':
                 #自機データ送信,セッションID取得
-                if user_id:
-                    data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id, 'id':user_id, 'pass':password}
-                else:
-                    data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
+                data = {'ipaddr':my_ipaddr, 'port':receive_port, 'tank_id':mytank_id}
                     
                 data = json.loads(urllib2.urlopen('http://{}/attend?json={}'.format(server_addr,
                                               urllib2.quote(json.dumps(data)))).read())
@@ -1314,7 +1260,7 @@ if __name__ == '__main__':
                 if poll_secs <= 0:
                     #サーバから承認されて開始データが来るまで待機
                     data = json.loads(urllib2.urlopen('http://{}/check'.format(server_addr)).read())
-                    poll_secs = 2  #デフォルトを3sに
+                    poll_secs = 1  #デフォルトを3sに
                 else:
                     poll_secs -= passed_seconds
                     

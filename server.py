@@ -13,7 +13,7 @@ import json
 import random
 
 db_name = 'db.dat'
-userdb_name = 'userdb.dat'
+
 app = Flask(__name__)
 
 maze_x = 10
@@ -37,7 +37,7 @@ tank_dataset = [
     {
     'tank_speed':300.0,
     'bullet_speed':900.0,
-    'bullet_damage':25,
+    'bullet_damage':30,
     'hp':700,
     'bullet_per_sec':3,
     'accel_ratio':150,
@@ -47,7 +47,7 @@ tank_dataset = [
     'bullet_speed':1600.0,
     'bullet_damage':40,
     'hp':400,
-    'bullet_per_sec':1,
+    'bullet_per_sec':2,
     'accel_ratio':200,
     'brake_ratio':0.5},
     {
@@ -69,9 +69,9 @@ tank_dataset = [
     {
     'tank_speed':600.0,
     'bullet_speed':450.0,
-    'bullet_damage':25,
+    'bullet_damage':30,
     'hp':600,
-    'bullet_per_sec':1,
+    'bullet_per_sec':2,
     'accel_ratio':600,
     'brake_ratio':0.4}]
     
@@ -84,49 +84,16 @@ def get_db():
 def set_db(db):
     with open(db_name,'w') as f:
         pickle.dump(db,f)
-        
-def get_userdb():
-    with open(userdb_name,'r') as f:
-        db = pickle.load(f)
-    return db
 
-def set_userdb(db):
-    with open(userdb_name,'w') as f:
-        pickle.dump(db,f)
-        
-def auth(userid, password):
-    users = get_userdb()
-    for user in users:
-        if user['id'] == userid and user['pass'] == password:
-            return True
-    #auth fail
-    return False
-
-def get_userdata(userid):
-    users = get_userdb()
-    for user in users:
-        if user['id'] == userid:
-            return [user['name'],user['score']]
-    #fail
-    return False
 
 @app.route('/time')
 def give_time():
     return json.dumps([str(time.time()), request.remote_addr])
 
-#ユーザ認証して,データ返す
-@app.route('/user')
-def userdata():
-    user_id = request.args['id']
-    password = request.args['pass']
-    if not auth(user_id, password):
-        return json.dumps({'auth':False})
-    else:
-        return json.dumps({'auth':True,'userdat':get_userdata(user_id)})
 
 #参戦
 #query:json
-#json:ipaddr,port,tank_id,[user_id,password]
+#json:ipaddr,port,tank_id
 @app.route('/attend')
 def attend():
     db = get_db()
@@ -134,21 +101,7 @@ def attend():
     ipaddr = data['ipaddr']
     port = data['port']
     tank_id = data['tank_id']
-    #ユーザかの判定はidがNoneかどうか
-    user_id = data.get('id')
-    password = data.get('pass')
-    if user_id and password:
-        if not auth(user_id, password):
-            #認証失敗時は0を返す
-            return json.dumps({'session_id':0})
-        name, totalscore = get_userdata(user_id)
-        #名称未設定時
-        if name is None:
-            name = 'USER{}'.format(len(db['waitlist']))
-        is_user = True
-
-    else:
-        name = 'GUEST{}'.format(len(db['waitlist']))
+    name = 'GUEST{}'.format(len(db['waitlist']))
 
     session_id = random.randint(1,99999999)
     
@@ -165,7 +118,7 @@ def attend():
     
     #未アップロードのscoreは-1
     db['waitlist'].append({'ipaddr':ipaddr, 'port':port, 'tank_id':tank_id,
-                           'id':user_id,'name':name,'session_id':session_id, 'score':-1})
+                           'name':name,'session_id':session_id, 'score':-1})
     set_db(db)
     
     return json.dumps({'session_id':session_id,'name':name})
@@ -209,21 +162,13 @@ def score():
     score = int(request.args['score'])
     alivetime = float(request.args['alivetime'])
     db = get_db()
-    userid = None
     for i,session in  enumerate(db['battlelist'][battle_id][1]):
         if session['session_id'] == session_id:
             db['battlelist'][battle_id][1][i]['score'] = score
             db['battlelist'][battle_id][1][i]['alivetime'] = alivetime
-            userid = db['battlelist'][battle_id][1][i]['id']
+            
     set_db(db)
 
-    #ユーザの時はスコアを記録
-    if userid is not None:
-        users = get_userdb()
-        for i,user in enumerate(users):
-            if users[i]['id'] == userid:
-                users[i]['score'] += score
-        set_userdb(users)
     
     return ''
     
